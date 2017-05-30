@@ -10,24 +10,39 @@
 #define LOG(...) {fprintf(stdout, __VA_ARGS__); fprintf(runlog, __VA_ARGS__); fflush(stdout);}
 
 #define NTABS 12
+
 #define NCHANNELS 1536
+#define NCHANNELS_LOW (NCHANNELS / 4)
+
 #define NTIMES 25000
 #define DOWNSAMPLE_TIME 25
+#define NTIMES_LOW (NTIMES / DOWNSAMPLE_TIME)
+
+int downsampled[NCHANNELS_LOW * NTIMES_LOW];
+unsigned char packed[NCHANNELS_LOW * NTIMES_LOW / 8];
 
 FILE *runlog = NULL;
 
 /**
- * Downsample timeseries by summation
+ * Downsample timeseries by summation over time and frequency
+ *
+ * Not optimized, but such large sums are memory bound, not CPU bound
+ * On modern laptop (dell xps13) this program stays below a few percent CPU usage.
+ *
+ * Also, we are using 8bit integers, which are much faster than SSE/AVX operations on floats.
+ * See for some interesting reading https://github.com/jodavies/dot-product
  *
  * @param {int} index TAB index
- * @param {ushort[NTABS,NCHANNELS, padded_size]} buffer Ring buffer page to downsample
+ * @param {uchar[NTABS, NCHANNELS, padded_size]} buffer Ring buffer page to downsample
  * @param {int} padded_size Size of fastest dimension, as timeseries are padded for optimal memory layout on GPU
  */
 void downsample(int index, unsigned char *buffer, int padded_size) {
-  int tab[(NCHANNELS/4) * (25000/DOWNSAMPLE_TIME)];
+  int *temp1;
 
   int dc, dt;
-  for (dc=0; dc < NCHANNELS / 4; dc++) {
+
+  temp1 = downsampled;
+  for (dc=0; dc < NCHANNELS_LOW; dc++) {
     int ps0, ps1, ps2, ps3; // partial sums (per channel)
     unsigned char *s0; // channel 0
     unsigned char *s1; // channel 1
@@ -39,7 +54,7 @@ void downsample(int index, unsigned char *buffer, int padded_size) {
     s2 = &buffer[index * NCHANNELS * padded_size + ((dc << 2) + 2) * padded_size];
     s3 = &buffer[index * NCHANNELS * padded_size + ((dc << 2) + 3) * padded_size];
 
-    for (dt=0; dt < NTIMES / DOWNSAMPLE_TIME; dt++) {
+    for (dt=0; dt < NTIMES_LOW; dt++) {
       ps0 = 0;
       ps1 = 0;
       ps2 = 0;
@@ -52,10 +67,61 @@ void downsample(int index, unsigned char *buffer, int padded_size) {
         ps2 += *s2++;
         ps3 += *s3++;
       }
-      tab[dc * (NTIMES  / DOWNSAMPLE_TIME) + dt] = ps0 + ps1 + ps2 + ps3;
+      *temp1++ = ps0 + ps1 + ps2 + ps3;
     }
   }
 }
+
+/**
+ * Pack series to 1-bit
+ *   NBIN*NCHAN*NPOL*NSBLK => 1 x 384 x 1 x 1000 bits or 384x125 bytes
+ *
+ * @param {float[NCHANNELS_LOW]} offset RMS mean power of signal
+ * @param {float[NCHANNELS_LOW]} scale  2 times the standard deviation
+ */
+void pack(float *offset, float *scale) {
+  int *temp1 = downsampled;
+  unsigned char *temp2 = packed;
+
+  int dc, dt;
+  for (dc = 0; dc < NCHANNELS_LOW; dc++) {
+
+    // First pass: calculate average and standard deviation
+    int sum = 0;
+    int sqr = 0;
+    int *v = temp1;
+    for (dt=0; dt < DOWNSAMPLE_TIME; dt++) {
+      sqr += (*v) * (*v);
+      sum += *v++;
+    }
+
+    float avg = sum / (1.0 * NTIMES / DOWNSAMPLE_TIME);
+    float stdev = (sqr / (1.0 * NTIMES / DOWNSAMPLE_TIME)) - avg * avg;
+
+    // Save scale and offset
+    scale[dc] = 2.0 * avg;
+    offset[dc] = avg;
+
+    // Set cutoff or threshold to 2 stdev above average
+    int cutoff = stdev + 2.0 * avg;
+
+    // Second pass: compress to 1 bit:
+    // [0, avg+2sigam] => 0
+    // (avg+2sigma, inf) => 1
+    for (dt=0; dt < DOWNSAMPLE_TIME; dt+=8) {
+      *temp2 = *temp1++ > cutoff ? 1 << 7 : 0;
+      *temp2 += *temp1++ > cutoff ? 1 << 6 : 0;
+      *temp2 += *temp1++ > cutoff ? 1 << 5 : 0;
+      *temp2 += *temp1++ > cutoff ? 1 << 4 : 0;
+      *temp2 += *temp1++ > cutoff ? 1 << 3 : 0;
+      *temp2 += *temp1++ > cutoff ? 1 << 2 : 0;
+      *temp2 += *temp1++ > cutoff ? 1 << 1 : 0;
+      *temp2 += *temp1++ > cutoff ? 1      : 0;
+      temp2++;
+    }
+  }
+}
+
 
 /**
  * Initialize the CFITSIO library
@@ -122,7 +188,7 @@ dada_hdu_t *init_ringbuffer(char *key) {
     exit(EXIT_FAILURE);
   }
 
-  LOG("psrdada HEADER: %s\n", header);
+  LOG("psrdada HEADER:\n%s\n", header);
 
   return hdu;
 }
