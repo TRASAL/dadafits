@@ -45,6 +45,7 @@
 #include <getopt.h>
 #include <fitsio.h>
 #include <math.h>
+#include <signal.h>
 
 #include "dada_hdu.h"
 #include "ascii_header.h"
@@ -518,6 +519,9 @@ int main (int argc, char *argv[]) {
 
   while(!quit && !ipcbuf_eod(data_block)) {
     int tab; // tight array beam
+
+    // Trap Ctr-C and kill commands to properly close fits files on exit
+    signal(SIGTERM, fits_error_and_exit);
 
     LOG("Requesting page: %i\n", page_count);
     page = ipcbuf_get_next_read(data_block, &bufsz);
