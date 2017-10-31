@@ -73,6 +73,33 @@ unsigned char packed[NCHANNELS_LOW * NTIMES_LOW / 8];
 float offset[NCHANNELS_LOW];
 float scale[NCHANNELS_LOW];
 
+/**
+ * Close all opened fits files
+ */
+void close_fits() {
+  int tab, status;
+
+  for (tab=0; tab<NTABS; tab++) {
+    if (output[tab]) {
+      if (fits_close_file (output[tab], &status)) {
+        if (runlog) fits_report_error(runlog, status);
+        fits_report_error(stdout, status);
+      }
+    }
+  }
+}
+
+/**
+ * pretty print the fits error to the log, and close down cleanly
+ * @param {int} status The status code returned by the (failed) fits call
+ */
+void fits_error_and_exit(int status) {
+  if (runlog) fits_report_error(runlog, status);
+  fits_report_error(stdout, status);
+
+  close_fits();
+  exit(EXIT_FAILURE);
+}
 
 /**
  * Downsample timeseries by summation over time and frequency
@@ -248,25 +275,14 @@ void dadafits_fits_init (int science_case, int science_mode) {
     }
     LOG("Writing tab %02i to file %s\n", t, fname);
 
-    status = 0; if (fits_create_file(&fptr, fname, &status)) fits_report_error(stdout, status);
-    status = 0; if (fits_movabs_hdu(fptr, 1, NULL, &status)) fits_report_error(stdout, status);
-    status = 0; if (fits_write_date(fptr, &status))          fits_report_error(stdout, status);
-    status = 0; if (fits_write_chksum(fptr, &status))        fits_report_error(stdout, status);
+    status = 0; if (fits_create_file(&fptr, fname, &status)) fits_error_and_exit(status);
+    status = 0; if (fits_movabs_hdu(fptr, 1, NULL, &status)) fits_error_and_exit(status);
+    status = 0; if (fits_write_date(fptr, &status))          fits_error_and_exit(status);
+    status = 0; if (fits_write_chksum(fptr, &status))        fits_error_and_exit(status);
 
-    status = 0; if (fits_movabs_hdu(fptr, 2, NULL, &status)) fits_report_error(stdout, status);
+    status = 0; if (fits_movabs_hdu(fptr, 2, NULL, &status)) fits_error_and_exit(status);
 
     output[t] = fptr;
-  }
-}
-
-/**
- * Close all opened fits files
- */
-void close_fits() {
-  int tab, status;
-
-  for (tab=0; tab<NTABS; tab++) {
-    if (fits_close_file (output[tab], &status)) fits_report_error(stdout, status);
   }
 }
 
@@ -293,22 +309,22 @@ void write_fits_mode0(int tab, int rowid) {
 
   status = 0;
   if (fits_insert_rows(fptr, rowid, 1, &status)) {
-    fits_report_error(stdout, status);
+    fits_error_and_exit(status);
   }
 
   status = 0;
   if (fits_write_col(fptr, TFLOAT, 15, rowid + 1, 1, NCHANNELS_LOW, &offset, &status)) {
-    fits_report_error(stdout, status);
+    fits_error_and_exit(status);
   }
 
   status = 0;
   if (fits_write_col(fptr, TFLOAT, 16, rowid + 1, 1, NCHANNELS_LOW, &scale, &status)) {
-    fits_report_error(stdout, status);
+    fits_error_and_exit(status);
   }
 
   status = 0;
   if (fits_write_col(fptr, TBYTE,  17, rowid + 1, 1, NCHANNELS_LOW * NTIMES_LOW / 8, packed, &status)) {
-    fits_report_error(stdout, status);
+    fits_error_and_exit(status);
   }
 }
 
