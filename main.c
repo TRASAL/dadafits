@@ -1,17 +1,39 @@
 /**
  * program: dadafits
+ *          Written for the AA-Alert project, ASTRON
  *
  * Purpose: connect to a ring buffer and create FITS output per TAB
+ *          Depending on science case and mode, reduce time and frequency resolution to 1 bit
+ *          Fits files are created using templates
+ *
+ * Science case 3, mode 0:
+ *          template: sc34_1bit_I_reduced.txt
+ *
+ *          A ringbuffer page is interpreted as an array of Stokes I:
+ *          [NTABS, NCHANNELS, padded_size] = [12, 1536, > 12500]
+ *
+ *          The code reduces (by summation) from 12500 to 500 timesteps
+ *          and from 1536 to 384 channels.
+ *          Time dimension padding is required by other programes (GPU pipeline)
+ *          that connects to the same ringbuffer.
+ *
+ * Science case 3, mode 1:
+ *          template: sc3_8bit_IQUV_full.txt
+ *
+ * Science case 4, mode 0:
+ *          template: sc34_1bit_I_reduced.txt
  *
  *          A ringbuffer page is interpreted as an array of Stokes I:
  *          [NTABS, NCHANNELS, padded_size] = [12, 1536, > 25000]
  *
- *          The codes reduces (by summation) from 25000 to 1000 timesteps
- *          and from 1536 to 384 channels. These numbers are hardcoded.
+ *          The code reduces (by summation) from 25000 to 500 timesteps
+ *          and from 1536 to 384 channels.
  *          Time dimension padding is required by other programes (GPU pipeline)
  *          that connects to the same ringbuffer.
  *
- *          Written for the AA-Alert project, ASTRON
+ * Science case 4, mode 1:
+ *          template: sc4_8bit_IQUV_full.txt
+ *
  *
  * Author: Jisk Attema, Netherlands eScience Center
  * Licencse: Apache v2.0
@@ -22,6 +44,7 @@
 #include <fitsio.h>
 #include <getopt.h>
 #include <fitsio.h>
+#include <math.h>
 
 #include "dada_hdu.h"
 #include "ascii_header.h"
@@ -32,12 +55,24 @@ FILE *runlog = NULL;
 #define NTABS 12
 #define NCHANNELS 1536
 #define NCHANNELS_LOW (NCHANNELS / 4)
-#define NTIMES 25000
-#define DOWNSAMPLE_TIME 25
-#define NTIMES_LOW (NTIMES / DOWNSAMPLE_TIME)
+
+// 80 microsecond -> 2 milisecond
+#define SC3_NTIMES 12500
+#define SC3_DOWNSAMPLE_TIME 25
+
+// 40 microsecond -> 2 milisecond
+#define SC4_NTIMES 25000
+#define SC4_DOWNSAMPLE_TIME 50
+
+// the same for both science case 3 and 4
+#define NTIMES_LOW 500
 
 fitsfile *output[NTABS];
+int downsampled[NCHANNELS_LOW * NTIMES_LOW];
 unsigned char packed[NCHANNELS_LOW * NTIMES_LOW / 8];
+float offset[NCHANNELS_LOW];
+float scale[NCHANNELS_LOW];
+
 
 /**
  * Downsample timeseries by summation over time and frequency
@@ -45,134 +80,175 @@ unsigned char packed[NCHANNELS_LOW * NTIMES_LOW / 8];
  * Not optimized, but such large sums are memory bound, not CPU bound
  * On modern laptop (dell xps13) this program stays below a few percent CPU usage.
  *
+ * Data is copied from the buffer to the global 'downsampled' array
+ *
  * Also, we are using 8bit integers, which are much faster than SSE/AVX operations on floats.
  * See for some interesting reading https://github.com/jodavies/dot-product
  *
- * @param {int} tab TAB index
+ * @param {int} tab                                     TAB index
  * @param {uchar[NTABS, NCHANNELS, padded_size]} buffer Ring buffer page to downsample
- * @param {int} padded_size Size of fastest dimension, as timeseries are padded for optimal memory layout on GPU
- * @param {int[NCHANNELS_LOW, NTIMES_LOW]} downsampled Array of int to contain downsampled data.
+ * @param {int} padded_size                             Size of fastest dimension, as timeseries are padded for optimal memory layout on GPU
+ * @param {int} science_case                            Science case; either 3 (12500 samples) or 4 (25000 samples) per batch of 1.024 seconds
  */
-void downsample(int tab, unsigned char *buffer, int padded_size, int downsampled[NCHANNELS_LOW * NTIMES_LOW]) {
-  int dc, dt;
+void downsample_sc3(const int tab, const unsigned char *buffer, const int padded_size) {
+  int *temp1 = downsampled;
+  int dc; // downsampled channel
+  int dt; // downsampled time
+  int t; // full time
 
   for (dc=0; dc < NCHANNELS_LOW; dc++) {
-    int ps0, ps1, ps2, ps3; // partial sums (per channel)
-    unsigned char *s0; // channel 0
-    unsigned char *s1; // channel 1
-    unsigned char *s2; // channel 2
-    unsigned char *s3; // channel 3
-
-    s0 = &buffer[tab * NCHANNELS * padded_size + ((dc << 2) + 0) * padded_size];
-    s1 = &buffer[tab * NCHANNELS * padded_size + ((dc << 2) + 1) * padded_size];
-    s2 = &buffer[tab * NCHANNELS * padded_size + ((dc << 2) + 2) * padded_size];
-    s3 = &buffer[tab * NCHANNELS * padded_size + ((dc << 2) + 3) * padded_size];
+    // pointer to next sample in the four channels
+    unsigned const char *s0 = &buffer[tab * NCHANNELS * padded_size + ((dc << 2) + 0) * padded_size];
+    unsigned const char *s1 = &buffer[tab * NCHANNELS * padded_size + ((dc << 2) + 1) * padded_size];
+    unsigned const char *s2 = &buffer[tab * NCHANNELS * padded_size + ((dc << 2) + 2) * padded_size];
+    unsigned const char *s3 = &buffer[tab * NCHANNELS * padded_size + ((dc << 2) + 3) * padded_size];
 
     for (dt=0; dt < NTIMES_LOW; dt++) {
-      ps0 = 0;
-      ps1 = 0;
-      ps2 = 0;
-      ps3 = 0;
+      // partial sums (per channel)
+      int ps0 = 0;
+      int ps1 = 0;
+      int ps2 = 0;
+      int ps3 = 0;
 
-      int t;
-      for (t=0; t < DOWNSAMPLE_TIME; t++) {
+      for (t=0; t < SC3_DOWNSAMPLE_TIME; t++) {
         ps0 += *s0++;
         ps1 += *s1++;
         ps2 += *s2++;
         ps3 += *s3++;
       }
-      *downsampled++ = ps0 + ps1 + ps2 + ps3;
+      *temp1++ = ps0 + ps1 + ps2 + ps3;
+    }
+  }
+}
+
+void downsample_sc4(const int tab, const unsigned char *buffer, const int padded_size) {
+  int *temp1 = downsampled;
+  int dc; // downsampled channel
+  int dt; // downsampled time
+  int t; // full time
+
+  for (dc=0; dc < NCHANNELS_LOW; dc++) {
+    // pointer to next sample in the four channels
+    unsigned const char *s0 = &buffer[tab * NCHANNELS * padded_size + ((dc << 2) + 0) * padded_size];
+    unsigned const char *s1 = &buffer[tab * NCHANNELS * padded_size + ((dc << 2) + 1) * padded_size];
+    unsigned const char *s2 = &buffer[tab * NCHANNELS * padded_size + ((dc << 2) + 2) * padded_size];
+    unsigned const char *s3 = &buffer[tab * NCHANNELS * padded_size + ((dc << 2) + 3) * padded_size];
+
+    for (dt=0; dt < NTIMES_LOW; dt++) {
+      // partial sums (per channel)
+      int ps0 = 0;
+      int ps1 = 0;
+      int ps2 = 0;
+      int ps3 = 0;
+
+      for (t=0; t < SC4_DOWNSAMPLE_TIME; t++) {
+        ps0 += *s0++;
+        ps1 += *s1++;
+        ps2 += *s2++;
+        ps3 += *s3++;
+      }
+      *temp1++ = ps0 + ps1 + ps2 + ps3;
     }
   }
 }
 
 /**
- * Pack series to 1-bit
- *   NBIN*NCHAN*NPOL*NSBLK => 1 x 384 x 1 x 1000 bits or 384x125 bytes
- *
- * @param {int[NCHANNELS_LOW, NTIMES_LOW]} downsampled Array of int to contain downsampled data.
- * @param {unsigned char[NCHANNELS_LOW * NTIMES_LOW / 8]} packed Array of packed data
- * @param {float[NCHANNELS_LOW]} offset RMS mean power of signal
- * @param {float[NCHANNELS_LOW]} scale  2 times the standard deviation
+ * Pack series of 8-bit StokesI to 1-bit
+ *   NBIN*NCHAN*NPOL*NSBLK => 1 x 384 x 1 x 500 bits equals or 24000 bytes
  */
-void pack(
-  int downsampled[NCHANNELS_LOW * NTIMES_LOW],
-  unsigned char packed[NCHANNELS_LOW * NTIMES_LOW / 8],
-  float offset[NCHANNELS_LOW],
-  float scale[NCHANNELS_LOW]) {
-  int *temp1 = downsampled;
-  unsigned char *temp2 = packed;
+void pack_sc34() {
+  int *temp1;
+  unsigned char *temp2;
 
   int dc, dt;
   for (dc = 0; dc < NCHANNELS_LOW; dc++) {
 
-    // First pass: calculate average and standard deviation
-    // ====================================================
+    // First pass: calculate average(=offset) and stdev(=scale)
+    temp1 = downsampled;
     int sum = 0;
-    int sqr = 0;
-    int *v = temp1;
-    for (dt=0; dt < DOWNSAMPLE_TIME; dt++) {
-      sqr += (*v) * (*v);
-      sum += *v++;
+    int sos = 0;
+    for (dt=0; dt < NTIMES_LOW; dt++) {
+      sos += (*temp1) * (*temp1);
+      sum += *temp1++;
     }
+    offset[dc] = sum / (1.0 * NTIMES_LOW);
+    scale[dc] = sqrt((sos / (1.0 * NTIMES_LOW)) - (sum / (1.0 * NTIMES_LOW)) * (sum / (1.0 * NTIMES_LOW)));
 
-    double avg = sum / (1.0 * NTIMES / DOWNSAMPLE_TIME);
-    double stdev = (sqr / (1.0 * NTIMES / DOWNSAMPLE_TIME)) - avg * avg;
+    // Set cutoff to 1 stdev above average
+    int cutoff = offset[dc] + scale[dc];
 
-    // Save scale and offset
-    scale[dc] = 2.0 * avg;
-    offset[dc] = avg;
-
-    // Set cutoff or threshold to 2 stdev above average
-    int cutoff = stdev + 2.0 * avg;
-
-    // Second pass: compress to 1 bit
-    // ==============================
-    // [0, avg+2sigam] => 0
-    // (avg+2sigma, inf) => 1
-    for (dt=0; dt < DOWNSAMPLE_TIME; dt+=8) {
-      *temp2 = *temp1++ > cutoff ? 1 << 7 : 0;
-      *temp2 += *temp1++ > cutoff ? 1 << 6 : 0;
-      *temp2 += *temp1++ > cutoff ? 1 << 5 : 0;
-      *temp2 += *temp1++ > cutoff ? 1 << 4 : 0;
-      *temp2 += *temp1++ > cutoff ? 1 << 3 : 0;
-      *temp2 += *temp1++ > cutoff ? 1 << 2 : 0;
-      *temp2 += *temp1++ > cutoff ? 1 << 1 : 0;
-      *temp2 += *temp1++ > cutoff ? 1      : 0;
-      temp2++;
+    // Second pass: convert to 1 bit
+    temp1 = downsampled;
+    for (dt=0; dt < NTIMES_LOW; dt++) {
+      *temp1++ = *temp1 > cutoff ? 1 : 0;
     }
+  }
+
+  // Third pass: pack bits in bytes
+  temp1 = downsampled;
+  temp2 = packed;
+  int count;
+  for (count=0; count < NCHANNELS_LOW * NTIMES_LOW / 8; count++) {
+    *temp2  = *temp1++ ? 1 << 7 : 0;
+    *temp2 += *temp1++ ? 1 << 6 : 0;
+    *temp2 += *temp1++ ? 1 << 5 : 0;
+    *temp2 += *temp1++ ? 1 << 4 : 0;
+    *temp2 += *temp1++ ? 1 << 3 : 0;
+    *temp2 += *temp1++ ? 1 << 2 : 0;
+    *temp2 += *temp1++ ? 1 << 1 : 0;
+    *temp2 += *temp1++ ? 1      : 0;
+    temp2++;
   }
 }
 
 /**
  * Initialize the CFITSIO library
+ * @param {int} science_case  Science case; either 3 or 4 (12500 or 25000 samples) per batch of 1.024 seconds
+ * @param {int} science_mode  Science mode; either 0 or 1 (StokesI or StokesIQUV)
  */
-void dadafits_fits_init () {
+void dadafits_fits_init (int science_case, int science_mode) {
   float version;
-  char *fname[12] = {
-    "one.fits(template.txt)",
-    "two.fits(template.txt)",
-    "three.fits(template.txt)",
-    "four.fits(template.txt)",
-    "five.fits(template.txt)",
-    "six.fits(template.txt)",
-    "seven.fits(template.txt)",
-    "eight.fits(template.txt)",
-    "nine.fits(template.txt)",
-    "ten.fits(template.txt)",
-    "eleven.fits(template.txt)",
-    "twelve.fits(template.txt)"
-  };
-  int t, status;
-  fitsfile *fptr;
-
   fits_get_version(&version);
   LOG("Using FITS library version %f\n", version);
 
+  int t;
   for (t=0; t<NTABS; t++) {
-    LOG("Writing tab %02i to file %s\n", t, fname[t]);
+    int status;
+    char fname[256];
+    fitsfile *fptr;
 
-    status = 0; if (fits_create_file(&fptr, fname[t], &status)) fits_report_error(stdout, status);
+    switch (science_case) {
+      case 3:
+        if (science_mode == 0) { // I + TAB to compress and reduce
+          snprintf(fname, 256, "beam%c.fits(sc34_1bit_I_reduced.txt)", 'A'+t);
+        } else if (science_mode == 1) { // IQUV + TAB to dump
+          snprintf(fname, 256, "beam%c.fits(sc3_8bit_IQUV_full.txt)", 'A'+t);
+        } else {
+          // should not happen
+          fprintf(stderr, "Illegal science mode %i for science case 3\n", science_mode);
+          exit(EXIT_FAILURE);
+        }
+        break;
+      case 4:
+        if (science_mode == 0) { // I + TAB to compress and reduce
+          snprintf(fname, 256, "beam%c.fits(sc34_1bit_I_reduced.txt)", 'A'+t);
+        } else if (science_mode == 1) { // IQUV + TAB to dump
+          snprintf(fname, 256, "beam%c.fits(sc4_8bit_IQUV_full.txt)", 'A'+t);
+        } else {
+          // should not happen
+          fprintf(stderr, "Illegal science mode %i for science case 3\n", science_mode);
+          exit(EXIT_FAILURE);
+        }
+        break;
+      default:
+        // should not happen, exit
+        fprintf(stderr, "Illegal science case %i\n", science_case);
+        exit(-1);
+        break;
+    }
+    LOG("Writing tab %02i to file %s\n", t, fname);
+
+    status = 0; if (fits_create_file(&fptr, fname, &status)) fits_report_error(stdout, status);
     status = 0; if (fits_movabs_hdu(fptr, 1, NULL, &status)) fits_report_error(stdout, status);
     status = 0; if (fits_write_date(fptr, &status))          fits_report_error(stdout, status);
     status = 0; if (fits_write_chksum(fptr, &status))        fits_report_error(stdout, status);
@@ -183,7 +259,9 @@ void dadafits_fits_init () {
   }
 }
 
-
+/**
+ * Close all opened fits files
+ */
 void close_fits() {
   int tab, status;
 
@@ -193,22 +271,18 @@ void close_fits() {
 }
 
 /**
- * Write a row to a FITS BINTABLE.SUBINT
- * @param {int} tab Tight array beam index used to select output file
- * @param {int} rowid Row number in the SUBINT table, corresponds to ringbuffer page number
- * @param {unsigned char[NCHANNELS_LOW * NTIMES_LOW / 8]} packed Array of packed data
- * @param {float[NCHANNELS_LOW]} offset RMS mean power of signal
- * @param {float[NCHANNELS_LOW]} scale  2 times the standard deviation
+ * Write a row of packed, 1 bit Stokes I to a FITS BINTABLE.SUBINT
+ *
+ * Uses the global arrays: 'scale', 'offset', and 'packed'
+ *
+ * @param {int} tab                Tight array beam index used to select output file
+ * @param {int} rowid              Row number in the SUBINT table, corresponds to ringbuffer page number
  */
-void write_fits(
-  int tab,
-  int rowid,
-  unsigned char packed[NCHANNELS_LOW * NTIMES_LOW / 8],
-  float offset[NCHANNELS_LOW],
-  float scale[NCHANNELS_LOW]) {
+void write_fits_mode0(int tab, int rowid) {
   int status;
   fitsfile *fptr = output[tab];
 
+  // fits_write_col parameters:
   // type
   // column
   // firstrow
@@ -233,7 +307,7 @@ void write_fits(
   }
 
   status = 0;
-  if (fits_write_col(fptr, TBYTE,  17, rowid + 1, 1, NCHANNELS_LOW * NTIMES_LOW / 8, &packed, &status)) {
+  if (fits_write_col(fptr, TBYTE,  17, rowid + 1, 1, NCHANNELS_LOW * NTIMES_LOW / 8, packed, &status)) {
     fits_report_error(stdout, status);
   }
 }
@@ -273,6 +347,7 @@ dada_hdu_t *init_ringbuffer(char *key) {
   // get write address
   char *header;
   uint64_t bufsz;
+  LOG("dadafits reading header");
   header = ipcbuf_get_next_read (hdu->header_block, &bufsz);
   if (! header || ! bufsz) {
     LOG("ERROR. Get next header block error\n");
@@ -302,19 +377,19 @@ dada_hdu_t *init_ringbuffer(char *key) {
  * Print commandline options
  */
 void printOptions() {
-  printf("usage: dadafits -k <hexadecimal key> -l <logfile> -b <padded_size>\n");
-  printf("e.g. dadafits -k dada -l log.txt -b 25088\n");
+  printf("usage: dadafits -k <hexadecimal key> -l <logfile> -c <science_case> -m <science_mode> -b <padded_size>\n");
+  printf("e.g. dadafits -k dada -l log.txt -c 3 -m 0 -b 25088\n");
   return;
 }
 
 /**
  * Parse commandline
  */
-void parseOptions(int argc, char *argv[], char **key, int *padded_size, char **logfile) {
+void parseOptions(int argc, char *argv[], char **key, int *padded_size, char **logfile, int *science_case, int *science_mode) {
   int c;
 
-  int setk=0, setb=0, setl=0;
-  while((c=getopt(argc,argv,"k:b:l:"))!=-1) {
+  int setk=0, setb=0, setl=0, setc=0, setm=0;
+  while((c=getopt(argc,argv,"k:b:l:c:m:"))!=-1) {
     switch(c) {
       // -k <hexadecimal_key>
       case('k'):
@@ -334,6 +409,18 @@ void parseOptions(int argc, char *argv[], char **key, int *padded_size, char **l
         setl=1;
         break;
 
+      // -c science_case
+      case('c'):
+        *science_case = atoi(optarg);
+        setc = 1;
+        break;
+
+      // -m science_mode
+      case('m'):
+        *science_mode = atoi(optarg);
+        setm = 1;
+        break;
+
       default:
         printOptions();
         exit(0);
@@ -341,7 +428,7 @@ void parseOptions(int argc, char *argv[], char **key, int *padded_size, char **l
   }
 
   // All arguments are required
-  if (!setk || !setl || !setb) {
+  if (!setk || !setl || !setb || !setc || !setm) {
     printOptions();
     exit(EXIT_FAILURE);
   }
@@ -352,9 +439,11 @@ int main (int argc, char *argv[]) {
   char *key;
   int padded_size;
   char *logfile;
+  int science_case;
+  int science_mode;
 
   // parse commandline
-  parseOptions(argc, argv, &key, &padded_size, &logfile);
+  parseOptions(argc, argv, &key, &padded_size, &logfile, &science_case, &science_mode);
 
   // set up logging
   if (logfile) {
@@ -369,7 +458,37 @@ int main (int argc, char *argv[]) {
 
   LOG("dadafits version: " VERSION "\n");
 
-  dadafits_fits_init ();
+  int nchannels;
+  int row_size = 0;
+
+  switch (science_case) {
+    case 3:
+      if (science_mode == 0) { // I + TAB to be compressed and downsampled
+        row_size = NCHANNELS_LOW * NTIMES_LOW / 8;
+        nchannels = NCHANNELS_LOW;
+      } else if (science_mode == 1) { // IQUV + TAB
+      } else{
+        fprintf(stderr, "Illegal science mode %i for science case 3\n", science_mode);
+        exit(EXIT_FAILURE);
+      }
+      break;
+    case 4:
+      if (science_mode == 0) { // I + TAB to be compressed and downsampled
+        row_size = NCHANNELS_LOW * NTIMES_LOW / 8;
+        nchannels = NCHANNELS_LOW;
+      } else if (science_mode == 1) { // IQUV + TAB
+      } else{
+        fprintf(stderr, "Illegal science mode %i for science case 4\n", science_mode);
+        exit(EXIT_FAILURE);
+      }
+      break;
+    default:
+      fprintf(stderr, "Illegal science case %i\n", science_case);
+      exit(EXIT_FAILURE);
+  }
+  unsigned char *data = malloc(row_size);
+
+  dadafits_fits_init(science_case, science_mode);
 
   dada_hdu_t *ringbuffer = init_ringbuffer(key);
   ipcbuf_t *data_block = (ipcbuf_t *) ringbuffer->data_block;
@@ -380,22 +499,36 @@ int main (int argc, char *argv[]) {
 
   int page_count = 0;
   char *page = NULL;
-  int downsampled[NCHANNELS_LOW * NTIMES_LOW];
-  unsigned char packed[NCHANNELS_LOW * NTIMES_LOW / 8];
-  float offset[NCHANNELS_LOW];
-  float scale[NCHANNELS_LOW];
 
   while(!quit && !ipcbuf_eod(data_block)) {
     int tab; // tight array beam
 
+    LOG("Requesting page: %i\n", page_count);
     page = ipcbuf_get_next_read(data_block, &bufsz);
+    LOG("Page read\n");
+
     if (! page) {
       quit = 1;
     } else {
-      for (tab = 0; tab < NTABS; tab++) {
-        downsample(tab, page, padded_size, downsampled);
-        pack(downsampled, packed, offset, scale);
-        write_fits(tab, page_count, packed, offset, scale);
+      switch (science_mode) {
+        case 0: // stokesI data to compress and downsample
+          for (tab = 0; tab < NTABS; tab++) {
+            if (science_case == 3) {
+              downsample_sc3(tab, page, padded_size); // moves data from the page to the downsampled array
+            } else if (science_case == 4) {
+              downsample_sc4(tab, page, padded_size); // moves data from the page to the downsampled array
+            }
+            pack_sc34(); // moves data from the downsampled array to the packed array, and sets scale and offset array
+            write_fits_mode0(tab, page_count); // writes data from the packed, scale, and offset array
+          }
+        break;
+        case 1: // stokes IQUV to dump
+        break;
+        default:
+          // should not happen
+          fprintf(stderr, "Illegal science mode %i\n", science_mode);
+          quit = 1;
+          break;
       }
       ipcbuf_mark_cleared((ipcbuf_t *) ipc);
       page_count++;
