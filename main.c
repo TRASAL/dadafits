@@ -246,9 +246,9 @@ void dadafits_fits_init (char *template_file, char *output_directory) {
     fitsfile *fptr;
 
     if (output_directory) {
-      snprintf(fname, 256, "beam%c.fits(%s)", 'A'+t, template_file);
-    } else {
       snprintf(fname, 256, "%s/beam%c.fits(%s)", 'A'+t, output_directory, template_file);
+    } else {
+      snprintf(fname, 256, "beam%c.fits(%s)", 'A'+t, template_file);
     }
     LOG("Writing tab %02i to file %s\n", t, fname);
 
