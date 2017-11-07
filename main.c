@@ -80,6 +80,7 @@ float scale[NCHANNELS_LOW];
 void close_fits() {
   int tab, status;
 
+  LOG("Closing files");
   for (tab=0; tab<NTABS_MAX; tab++) {
     if (output[tab]) {
       if (fits_close_file (output[tab], &status)) {
@@ -128,6 +129,7 @@ void downsample_sc3(const int tab, const unsigned char *buffer, const int padded
   int dt; // downsampled time
   int t; // full time
 
+  LOG("Downsampling sc3");
   for (dc=0; dc < NCHANNELS_LOW; dc++) {
     // pointer to next sample in the four channels
     unsigned const char *s0 = &buffer[tab * NCHANNELS * padded_size + ((dc << 2) + 0) * padded_size];
@@ -149,6 +151,7 @@ void downsample_sc3(const int tab, const unsigned char *buffer, const int padded
         ps3 += *s3++;
       }
       *temp1++ = ps0 + ps1 + ps2 + ps3;
+      LOG("value: %i\n", ps0+ps1+ps2+ps3);
     }
   }
 }
@@ -158,7 +161,7 @@ void downsample_sc4(const int tab, const unsigned char *buffer, const int padded
   int dc; // downsampled channel
   int dt; // downsampled time
   int t; // full time
-
+  LOG("Downsampling sc4");
   for (dc=0; dc < NCHANNELS_LOW; dc++) {
     // pointer to next sample in the four channels
     unsigned const char *s0 = &buffer[tab * NCHANNELS * padded_size + ((dc << 2) + 0) * padded_size];
@@ -180,6 +183,7 @@ void downsample_sc4(const int tab, const unsigned char *buffer, const int padded
         ps3 += *s3++;
       }
       *temp1++ = ps0 + ps1 + ps2 + ps3;
+      LOG("value: %i\n", ps0+ps1+ps2+ps3);
     }
   }
 }
@@ -192,6 +196,7 @@ void pack_sc34() {
   int *temp1;
   unsigned char *temp2;
 
+  LOG("Packing");
   int dc, dt;
   for (dc = 0; dc < NCHANNELS_LOW; dc++) {
 
@@ -229,6 +234,7 @@ void pack_sc34() {
     *temp2 += *temp1++ ? 1 << 2 : 0;
     *temp2 += *temp1++ ? 1 << 1 : 0;
     *temp2 += *temp1++ ? 1      : 0;
+    LOG("packed: %i\n", *temp2);
     temp2++;
   }
 }
@@ -311,9 +317,9 @@ void write_fits_packed(int tab, int rowid) {
 
   // DEBUG OUTPUT
   int i;
-  printf("Writing to row: %i\n", rowid);
+  LOG("Writing to row: %i\n", rowid);
   for (i=0; i<NCHANNELS_LOW; i++) {
-    printf("%i\t%f\t%f\n", i, offset[i], scale[i]);
+    LOG("%i\t%f\t%f\n", i, offset[i], scale[i]);
   }
 }
 
@@ -541,9 +547,12 @@ int main (int argc, char *argv[]) {
             write_fits_packed(tab, page_count); // writes data from the packed, scale, and offset array
           }
         break;
+
         case 1: // stokes IQUV to dump
           // TODO
-        break;
+          exit(EXIT_FAILURE);
+          break;
+
         default:
           // should not happen
           fprintf(stderr, "Illegal science mode %i\n", science_mode);
