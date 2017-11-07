@@ -231,10 +231,10 @@ void pack_sc34() {
 
 /**
  * Initialize the CFITSIO library
- * @param {int} science_case  Science case; either 3 or 4 (12500 or 25000 samples) per batch of 1.024 seconds
- * @param {int} science_mode  Science mode; either 0 or 1 (StokesI or StokesIQUV)
+ * @param {char *} template_file    FITS template to use for creating initial file.
+ * @param {char *} output_directory Directoy where output FITS files can be written.
  */
-void dadafits_fits_init (int science_case, int science_mode) {
+void dadafits_fits_init (char *template_file, char *output_directory) {
   float version;
   fits_get_version(&version);
   LOG("Using FITS library version %f\n", version);
@@ -245,34 +245,10 @@ void dadafits_fits_init (int science_case, int science_mode) {
     char fname[256];
     fitsfile *fptr;
 
-    switch (science_case) {
-      case 3:
-        if (science_mode == 0) { // I + TAB to compress and reduce
-          snprintf(fname, 256, "beam%c.fits(sc34_1bit_I_reduced.txt)", 'A'+t);
-        } else if (science_mode == 1) { // IQUV + TAB to dump
-          snprintf(fname, 256, "beam%c.fits(sc3_8bit_IQUV_full.txt)", 'A'+t);
-        } else {
-          // should not happen
-          fprintf(stderr, "Illegal science mode %i for science case 3\n", science_mode);
-          exit(EXIT_FAILURE);
-        }
-        break;
-      case 4:
-        if (science_mode == 0) { // I + TAB to compress and reduce
-          snprintf(fname, 256, "beam%c.fits(sc34_1bit_I_reduced.txt)", 'A'+t);
-        } else if (science_mode == 1) { // IQUV + TAB to dump
-          snprintf(fname, 256, "beam%c.fits(sc4_8bit_IQUV_full.txt)", 'A'+t);
-        } else {
-          // should not happen
-          fprintf(stderr, "Illegal science mode %i for science case 3\n", science_mode);
-          exit(EXIT_FAILURE);
-        }
-        break;
-      default:
-        // should not happen, exit
-        fprintf(stderr, "Illegal science case %i\n", science_case);
-        exit(-1);
-        break;
+    if (output_directory) {
+      snprintf(fname, 256, "beam%c.fits(%s)", 'A'+t, template_file);
+    } else {
+      snprintf(fname, 256, "%s/beam%c.fits(%s)", 'A'+t, output_directory, template_file);
     }
     LOG("Writing tab %02i to file %s\n", t, fname);
 
@@ -394,20 +370,33 @@ dada_hdu_t *init_ringbuffer(char *key) {
  * Print commandline options
  */
 void printOptions() {
-  printf("usage: dadafits -k <hexadecimal key> -l <logfile> -c <science_case> -m <science_mode> -b <padded_size>\n");
-  printf("e.g. dadafits -k dada -l log.txt -c 3 -m 0 -b 25088\n");
+  printf("usage: dadafits -k <hexadecimal key> -l <logfile> -c <science_case> -m <science_mode> -b <padded_size> -t <template> -d <output_directory>\n");
+  printf("e.g. dadafits -k dada -l log.txt -c 3 -m 0 -b 25088 -t /full/path/template.txt -d /output/directory\n");
   return;
 }
 
 /**
  * Parse commandline
  */
-void parseOptions(int argc, char *argv[], char **key, int *padded_size, char **logfile, int *science_case, int *science_mode) {
+void parseOptions(int argc, char *argv[], char **key, int *padded_size, char **logfile, int *science_case, int *science_mode, char **template_file, char **output_directory) {
   int c;
 
-  int setk=0, setb=0, setl=0, setc=0, setm=0;
-  while((c=getopt(argc,argv,"k:b:l:c:m:"))!=-1) {
+  int setk=0, setb=0, setl=0, setc=0, setm=0, sett=0, setd=0;
+  while((c=getopt(argc,argv,"k:b:l:c:m:t:d:"))!=-1) {
     switch(c) {
+      // -t <template_file>
+      case('t'):
+        *template_file = strdup(optarg);
+        sett=1;
+        break;
+        
+      // OPTIONAL: -d <output_directory>
+      // DEFAULT: CWD
+      case('d'):
+        *output_directory = strdup(optarg);
+        setd=1;
+        break;
+
       // -k <hexadecimal_key>
       case('k'):
         *key = strdup(optarg);
@@ -444,8 +433,8 @@ void parseOptions(int argc, char *argv[], char **key, int *padded_size, char **l
     }
   }
 
-  // All arguments are required
-  if (!setk || !setl || !setb || !setc || !setm) {
+  // Required arguments
+  if (!setk || !setl || !setb || !setc || !setm || !sett) {
     printOptions();
     exit(EXIT_FAILURE);
   }
@@ -456,11 +445,13 @@ int main (int argc, char *argv[]) {
   char *key;
   int padded_size;
   char *logfile;
+  char *template_file;
+  char *output_directory = NULL; // defaults to CWD
   int science_case;
   int science_mode;
 
   // parse commandline
-  parseOptions(argc, argv, &key, &padded_size, &logfile, &science_case, &science_mode);
+  parseOptions(argc, argv, &key, &padded_size, &logfile, &science_case, &science_mode, &template_file, &output_directory);
 
   // set up logging
   if (logfile) {
@@ -505,7 +496,7 @@ int main (int argc, char *argv[]) {
   }
   unsigned char *data = malloc(row_size);
 
-  dadafits_fits_init(science_case, science_mode);
+  dadafits_fits_init(template_file, output_directory);
 
   dada_hdu_t *ringbuffer = init_ringbuffer(key);
   ipcbuf_t *data_block = (ipcbuf_t *) ringbuffer->data_block;
