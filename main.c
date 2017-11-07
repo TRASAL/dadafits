@@ -69,7 +69,7 @@ FILE *runlog = NULL;
 #define NTIMES_LOW 500
 
 fitsfile *output[NTABS_MAX];
-int downsampled[NCHANNELS_LOW * NTIMES_LOW];
+unsigned int downsampled[NCHANNELS_LOW * NTIMES_LOW];
 unsigned char packed[NCHANNELS_LOW * NTIMES_LOW / 8];
 float offset[NCHANNELS_LOW];
 float scale[NCHANNELS_LOW];
@@ -124,7 +124,7 @@ void fits_error_and_exit(int status, int line) {
  * @param {int} science_case                            Science case; either 3 (12500 samples) or 4 (25000 samples) per batch of 1.024 seconds
  */
 void downsample_sc3(const int tab, const unsigned char *buffer, const int padded_size) {
-  int *temp1 = downsampled;
+  unsigned int *temp1 = downsampled;
   int dc; // downsampled channel
   int dt; // downsampled time
   int t; // full time
@@ -139,10 +139,10 @@ void downsample_sc3(const int tab, const unsigned char *buffer, const int padded
 
     for (dt=0; dt < NTIMES_LOW; dt++) {
       // partial sums (per channel)
-      int ps0 = 0;
-      int ps1 = 0;
-      int ps2 = 0;
-      int ps3 = 0;
+      unsigned int ps0 = 0;
+      unsigned int ps1 = 0;
+      unsigned int ps2 = 0;
+      unsigned int ps3 = 0;
 
       for (t=0; t < SC3_DOWNSAMPLE_TIME; t++) {
         ps0 += *s0++;
@@ -151,13 +151,13 @@ void downsample_sc3(const int tab, const unsigned char *buffer, const int padded
         ps3 += *s3++;
       }
       *temp1++ = ps0 + ps1 + ps2 + ps3;
-      LOG("value: %i\n", ps0+ps1+ps2+ps3);
+      // LOG("value: %i\n", ps0+ps1+ps2+ps3);
     }
   }
 }
 
 void downsample_sc4(const int tab, const unsigned char *buffer, const int padded_size) {
-  int *temp1 = downsampled;
+  unsigned int *temp1 = downsampled;
   int dc; // downsampled channel
   int dt; // downsampled time
   int t; // full time
@@ -171,10 +171,10 @@ void downsample_sc4(const int tab, const unsigned char *buffer, const int padded
 
     for (dt=0; dt < NTIMES_LOW; dt++) {
       // partial sums (per channel)
-      int ps0 = 0;
-      int ps1 = 0;
-      int ps2 = 0;
-      int ps3 = 0;
+      unsigned int ps0 = 0;
+      unsigned int ps1 = 0;
+      unsigned int ps2 = 0;
+      unsigned int ps3 = 0;
 
       for (t=0; t < SC4_DOWNSAMPLE_TIME; t++) {
         ps0 += *s0++;
@@ -193,29 +193,32 @@ void downsample_sc4(const int tab, const unsigned char *buffer, const int padded
  *   NBIN*NCHAN*NPOL*NSBLK => 1 x 384 x 1 x 500 bits equals or 24000 bytes
  */
 void pack_sc34() {
-  int *temp1;
+  unsigned int *temp1;
   unsigned char *temp2;
 
-  LOG("Packing");
-  int dc, dt;
+  LOG("Packing\n");
+  int dc;
   for (dc = 0; dc < NCHANNELS_LOW; dc++) {
 
     // First pass: calculate average(=offset) and stdev(=scale)
-    temp1 = downsampled;
+    temp1 = &downsampled[dc * NTIMES_LOW];
     int sum = 0;
     int sos = 0;
+
+    int dt;
     for (dt=0; dt < NTIMES_LOW; dt++) {
-      sos += (*temp1) * (*temp1);
-      sum += *temp1++;
+      unsigned int v = *temp1++;
+      sum += v;
+      sos += v * v;
     }
     offset[dc] = sum / (1.0 * NTIMES_LOW);
-    scale[dc] = sqrt((sos / (1.0 * NTIMES_LOW)) - (sum / (1.0 * NTIMES_LOW)) * (sum / (1.0 * NTIMES_LOW)));
+    scale[dc] = sqrt((sos / (1.0 * NTIMES_LOW)) - offset[dc] * offset[dc]);
 
     // Set cutoff to 1 stdev above average
     int cutoff = offset[dc] + scale[dc];
 
     // Second pass: convert to 1 bit
-    temp1 = downsampled;
+    temp1 = &downsampled[dc * NTIMES_LOW];
     for (dt=0; dt < NTIMES_LOW; dt++) {
       *temp1++ = *temp1 > cutoff ? 1 : 0;
     }
