@@ -324,6 +324,12 @@ void write_fits_packed(int tab, int rowid) {
     fits_error_and_exit(status, __LINE__);
   }
 
+  double offs_sub = rowid + 1;
+  status = 0;
+  if (fits_write_col(fptr, TDOUBLE, 2, rowid + 1, 1, 1, &offs_sub, &status)) {
+    fits_error_and_exit(status, __LINE__);
+  }
+
   status = 0;
   if (fits_write_col(fptr, TFLOAT, 15, rowid + 1, 1, NCHANNELS_LOW, &offset, &status)) {
     fits_error_and_exit(status, __LINE__);
