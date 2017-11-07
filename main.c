@@ -228,12 +228,11 @@ void pack_sc34() {
     unsigned int sos = 0;
 
     int dt;
-    for (dt=dc*NTIMES_LOW; dt < (dc+1)*NTIMES_LOW; dt++) {
-      unsigned int v = downsampled[dt];
-      sum += v;
-      sos += v * v;
+    // for (dt=dc*NTIMES_LOW; dt < (dc+1)*NTIMES_LOW; dt++) {
+    for (dt=0; dt < NTIMES_LOW; dt++) {
+      sos += (*temp1) * (*temp1);
+      sum += *temp1++;
     }
-    LOG("dc, sum, sos: %i %i %i\n", dc, sum, sos);
     offset[dc] = sum / (1.0 * NTIMES_LOW);
     scale[dc] = sqrt((sos / (1.0 * NTIMES_LOW)) - offset[dc] * offset[dc]);
 
@@ -241,8 +240,9 @@ void pack_sc34() {
     int cutoff = offset[dc] + scale[dc];
 
     // Second pass: convert to 1 bit
-    for (dt=dc*NTIMES_LOW; dt < (dc+1)*NTIMES_LOW; dt++) {
-      downsampled[dt] = downsampled[dt] > cutoff ? 1 : 0;
+    temp1 = &downsampled[dc * NTIMES_LOW];
+    for (dt=0; dt < NTIMES_LOW; dt++) {
+      *temp1++ = *temp1 > cutoff ? 1 : 0;
     }
   }
 
@@ -540,12 +540,14 @@ int main (int argc, char *argv[]) {
 
   int page_count = 0;
   // char *page = NULL;
-  int mysize = NTABS_MAX * NCHANNELS * padded_size;
-  char *page = malloc(mysize);
-  int kkk;
-  for(kkk=0; kkk<mysize; kkk++) {
-    page[kkk] = round(10.0 * rand()/RAND_MAX );
-  }
+  
+    int mysize = NTABS_MAX * NCHANNELS * padded_size;
+    char *page = malloc(mysize);
+    int kkk;
+    for(kkk=0; kkk<mysize; kkk++) {
+      page[kkk] = round(10.0 * rand()/RAND_MAX );
+    }
+  
 
   // while(!quit && !ipcbuf_eod(data_block)) {
   while(!quit) {
@@ -555,7 +557,7 @@ int main (int argc, char *argv[]) {
     signal(SIGTERM, fits_error_and_exit);
 
     // page = ipcbuf_get_next_read(data_block, &bufsz);
-    if (page_count == 2) {
+    if (page_count == 100) {
       page = NULL;
     }
 
