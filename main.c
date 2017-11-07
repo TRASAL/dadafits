@@ -155,6 +155,7 @@ void downsample_sc3(const int tab, const unsigned char *buffer, const int padded
   int dt; // downsampled time
   int t; // full time
 
+  LOG("Downsampling sc3");
   for (dc=0; dc < NCHANNELS_LOW; dc++) {
     // pointer to next sample in the four channels
     unsigned const char *s0 = &buffer[tab * NCHANNELS * padded_size + ((dc << 2) + 0) * padded_size];
@@ -176,6 +177,7 @@ void downsample_sc3(const int tab, const unsigned char *buffer, const int padded
         ps3 += *s3++;
       }
       *temp1++ = ps0 + ps1 + ps2 + ps3;
+      LOG("value: %i\n", ps0+ps1+ps2+ps3);
     }
   }
 }
@@ -185,7 +187,7 @@ void downsample_sc4(const int tab, const unsigned char *buffer, const int padded
   int dc; // downsampled channel
   int dt; // downsampled time
   int t; // full time
-
+  LOG("Downsampling sc4");
   for (dc=0; dc < NCHANNELS_LOW; dc++) {
     // pointer to next sample in the four channels
     unsigned const char *s0 = &buffer[tab * NCHANNELS * padded_size + ((dc << 2) + 0) * padded_size];
@@ -207,6 +209,7 @@ void downsample_sc4(const int tab, const unsigned char *buffer, const int padded
         ps3 += *s3++;
       }
       *temp1++ = ps0 + ps1 + ps2 + ps3;
+      LOG("value: %i\n", ps0+ps1+ps2+ps3);
     }
   }
 }
@@ -259,6 +262,7 @@ void pack_sc34() {
     *temp2 += *temp1++ ? 1 << 2 : 0;
     *temp2 += *temp1++ ? 1 << 1 : 0;
     *temp2 += *temp1++ ? 1      : 0;
+    LOG("packed: %i\n", *temp2);
     temp2++;
   }
 }
