@@ -129,7 +129,6 @@ void downsample_sc3(const int tab, const unsigned char *buffer, const int padded
   int dt; // downsampled time
   int t; // full time
 
-  LOG("Downsampling sc3");
   for (dc=0; dc < NCHANNELS_LOW; dc++) {
     // pointer to next sample in the four channels
     unsigned const char *s0 = &buffer[tab * NCHANNELS * padded_size + ((dc << 2) + 0) * padded_size];
@@ -151,7 +150,6 @@ void downsample_sc3(const int tab, const unsigned char *buffer, const int padded
         ps3 += *s3++;
       }
       *temp1++ = ps0 + ps1 + ps2 + ps3;
-      // LOG("value: %i\n", ps0+ps1+ps2+ps3);
     }
   }
 }
@@ -161,7 +159,7 @@ void downsample_sc4(const int tab, const unsigned char *buffer, const int padded
   int dc; // downsampled channel
   int dt; // downsampled time
   int t; // full time
-  LOG("Downsampling sc4");
+
   for (dc=0; dc < NCHANNELS_LOW; dc++) {
     // pointer to next sample in the four channels
     unsigned const char *s0 = &buffer[tab * NCHANNELS * padded_size + ((dc << 2) + 0) * padded_size];
@@ -183,7 +181,6 @@ void downsample_sc4(const int tab, const unsigned char *buffer, const int padded
         ps3 += *s3++;
       }
       *temp1++ = ps0 + ps1 + ps2 + ps3;
-      LOG("value: %i\n", ps0+ps1+ps2+ps3);
     }
   }
 }
@@ -196,21 +193,21 @@ void pack_sc34() {
   unsigned int *temp1;
   unsigned char *temp2;
 
-  LOG("Packing\n");
   int dc;
   for (dc = 0; dc < NCHANNELS_LOW; dc++) {
 
     // First pass: calculate average(=offset) and stdev(=scale)
     temp1 = &downsampled[dc * NTIMES_LOW];
-    int sum = 0;
-    int sos = 0;
+    unsigned int sum = 0;
+    unsigned int sos = 0;
 
     int dt;
-    for (dt=0; dt < NTIMES_LOW; dt++) {
-      unsigned int v = *temp1++;
+    for (dt=dc*NTIMES_LOW; dt < (dc+1)*NTIMES_LOW; dt++) {
+      unsigned int v = downsampled[dt];
       sum += v;
       sos += v * v;
     }
+    LOG("dc, sum, sos: %i %i %i\n", dc, sum, sos);
     offset[dc] = sum / (1.0 * NTIMES_LOW);
     scale[dc] = sqrt((sos / (1.0 * NTIMES_LOW)) - offset[dc] * offset[dc]);
 
@@ -218,9 +215,8 @@ void pack_sc34() {
     int cutoff = offset[dc] + scale[dc];
 
     // Second pass: convert to 1 bit
-    temp1 = &downsampled[dc * NTIMES_LOW];
-    for (dt=0; dt < NTIMES_LOW; dt++) {
-      *temp1++ = *temp1 > cutoff ? 1 : 0;
+    for (dt=dc*NTIMES_LOW; dt < (dc+1)*NTIMES_LOW; dt++) {
+      downsampled[dt] = downsampled[dt] > cutoff ? 1 : 0;
     }
   }
 
@@ -237,7 +233,6 @@ void pack_sc34() {
     *temp2 += *temp1++ ? 1 << 2 : 0;
     *temp2 += *temp1++ ? 1 << 1 : 0;
     *temp2 += *temp1++ ? 1      : 0;
-    LOG("packed: %i\n", *temp2);
     temp2++;
   }
 }
@@ -316,13 +311,6 @@ void write_fits_packed(int tab, int rowid) {
   status = 0;
   if (fits_write_col(fptr, TBYTE,  17, rowid + 1, 1, NCHANNELS_LOW * NTIMES_LOW / 8, packed, &status)) {
     fits_error_and_exit(status, __LINE__);
-  }
-
-  // DEBUG OUTPUT
-  int i;
-  LOG("Writing to row: %i\n", rowid);
-  for (i=0; i<NCHANNELS_LOW; i++) {
-    LOG("%i\t%f\t%f\n", i, offset[i], scale[i]);
   }
 }
 
@@ -512,24 +500,34 @@ int main (int argc, char *argv[]) {
 
   dadafits_fits_init(template_file, output_directory, ntabs);
 
-  dada_hdu_t *ringbuffer = init_ringbuffer(key);
-  ipcbuf_t *data_block = (ipcbuf_t *) ringbuffer->data_block;
-  ipcio_t *ipc = ringbuffer->data_block;
+  // dada_hdu_t *ringbuffer = init_ringbuffer(key);
+  // ipcbuf_t *data_block = (ipcbuf_t *) ringbuffer->data_block;
+  // ipcio_t *ipc = ringbuffer->data_block;
 
   int quit = 0;
-  uint64_t bufsz = ipc->curbufsz;
+  // uint64_t bufsz = ipc->curbufsz;
 
   int page_count = 0;
-  char *page = NULL;
+  // char *page = NULL;
+  int mysize = NTABS_MAX * NCHANNELS * padded_size;
+  char *page = malloc(mysize);
+  int kkk;
+  for(kkk=0; kkk<mysize; kkk++) {
+    page[kkk] = round(10.0 * rand()/RAND_MAX );
+  }
 
-  while(!quit && !ipcbuf_eod(data_block)) {
+  // while(!quit && !ipcbuf_eod(data_block)) {
+  while(!quit) {
     int tab; // tight array beam
 
     // Trap Ctr-C and kill commands to properly close fits files on exit
     signal(SIGTERM, fits_error_and_exit);
 
     LOG("Requesting page: %i\n", page_count);
-    page = ipcbuf_get_next_read(data_block, &bufsz);
+    // page = ipcbuf_get_next_read(data_block, &bufsz);
+    if (page_count == 2) {
+      page = NULL;
+    }
     LOG("Page read\n");
 
     if (! page) {
@@ -562,18 +560,18 @@ int main (int argc, char *argv[]) {
           quit = 1;
           break;
       }
-      ipcbuf_mark_cleared((ipcbuf_t *) ipc);
+      // ipcbuf_mark_cleared((ipcbuf_t *) ipc);
       page_count++;
     }
   }
 
-  if (ipcbuf_eod(data_block)) {
-    LOG("End of data received\n");
-  }
+  // if (ipcbuf_eod(data_block)) {
+  //   LOG("End of data received\n");
+  // }
 
   close_fits();
 
-  dada_hdu_unlock_read(ringbuffer);
-  dada_hdu_disconnect(ringbuffer);
+  // dada_hdu_unlock_read(ringbuffer);
+  // dada_hdu_disconnect(ringbuffer);
   LOG("Read %i pages\n", page_count);
 }
