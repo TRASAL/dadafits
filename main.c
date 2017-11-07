@@ -20,6 +20,17 @@
  * Science case 3, mode 1:
  *          template: sc3_8bit_IQUV_full.txt
  *
+ * Science case 3, mode 2:
+ *          template: sc34_1bit_I_reduced.txt
+ *
+ *          A ringbuffer page is interpreted as an array of Stokes I:
+ *          [NTABS, NCHANNELS, padded_size] = [1, 1536, > 12500]
+ *
+ *          The code reduces (by summation) from 12500 to 500 timesteps
+ *          and from 1536 to 384 channels.
+ *          Time dimension padding is required by other programes (GPU pipeline)
+ *          that connects to the same ringbuffer.
+ *
  * Science case 4, mode 0:
  *          template: sc34_1bit_I_reduced.txt
  *
@@ -33,6 +44,17 @@
  *
  * Science case 4, mode 1:
  *          template: sc4_8bit_IQUV_full.txt
+ *
+ * Science case 4, mode 2:
+ *          template: sc34_1bit_I_reduced.txt
+ *
+ *          A ringbuffer page is interpreted as an array of Stokes I:
+ *          [NTABS, NCHANNELS, padded_size] = [1, 1536, > 25000]
+ *
+ *          The code reduces (by summation) from 25000 to 500 timesteps
+ *          and from 1536 to 384 channels.
+ *          Time dimension padding is required by other programes (GPU pipeline)
+ *          that connects to the same ringbuffer.
  *
  *
  * Author: Jisk Attema, Netherlands eScience Center
@@ -69,7 +91,7 @@ FILE *runlog = NULL;
 #define NTIMES_LOW 500
 
 fitsfile *output[NTABS_MAX];
-int downsampled[NCHANNELS_LOW * NTIMES_LOW];
+unsigned int downsampled[NCHANNELS_LOW * NTIMES_LOW];
 unsigned char packed[NCHANNELS_LOW * NTIMES_LOW / 8];
 float offset[NCHANNELS_LOW];
 float scale[NCHANNELS_LOW];
@@ -80,12 +102,17 @@ float scale[NCHANNELS_LOW];
 void close_fits() {
   int tab, status;
 
+  LOG("Closing files\n");
   for (tab=0; tab<NTABS_MAX; tab++) {
     if (output[tab]) {
-      if (fits_close_file (output[tab], &status)) {
-        if (runlog) fits_report_error(runlog, status);
-        fits_report_error(stdout, status);
-      }
+      // ignore errors on closing files; cfitsio 3.37 reports junk error codes
+      fits_close_file(output[tab], &status);
+
+      // FUTURE VERSION:
+      // if (fits_close_file (output[tab], &status)) {
+      //   if (runlog) fits_report_error(runlog, status);
+      //   fits_report_error(stdout, status);
+      // }
     }
   }
 }
@@ -123,7 +150,7 @@ void fits_error_and_exit(int status, int line) {
  * @param {int} science_case                            Science case; either 3 (12500 samples) or 4 (25000 samples) per batch of 1.024 seconds
  */
 void downsample_sc3(const int tab, const unsigned char *buffer, const int padded_size) {
-  int *temp1 = downsampled;
+  unsigned int *temp1 = downsampled;
   int dc; // downsampled channel
   int dt; // downsampled time
   int t; // full time
@@ -137,10 +164,10 @@ void downsample_sc3(const int tab, const unsigned char *buffer, const int padded
 
     for (dt=0; dt < NTIMES_LOW; dt++) {
       // partial sums (per channel)
-      int ps0 = 0;
-      int ps1 = 0;
-      int ps2 = 0;
-      int ps3 = 0;
+      unsigned int ps0 = 0;
+      unsigned int ps1 = 0;
+      unsigned int ps2 = 0;
+      unsigned int ps3 = 0;
 
       for (t=0; t < SC3_DOWNSAMPLE_TIME; t++) {
         ps0 += *s0++;
@@ -154,7 +181,7 @@ void downsample_sc3(const int tab, const unsigned char *buffer, const int padded
 }
 
 void downsample_sc4(const int tab, const unsigned char *buffer, const int padded_size) {
-  int *temp1 = downsampled;
+  unsigned int *temp1 = downsampled;
   int dc; // downsampled channel
   int dt; // downsampled time
   int t; // full time
@@ -168,10 +195,10 @@ void downsample_sc4(const int tab, const unsigned char *buffer, const int padded
 
     for (dt=0; dt < NTIMES_LOW; dt++) {
       // partial sums (per channel)
-      int ps0 = 0;
-      int ps1 = 0;
-      int ps2 = 0;
-      int ps3 = 0;
+      unsigned int ps0 = 0;
+      unsigned int ps1 = 0;
+      unsigned int ps2 = 0;
+      unsigned int ps3 = 0;
 
       for (t=0; t < SC4_DOWNSAMPLE_TIME; t++) {
         ps0 += *s0++;
@@ -189,28 +216,31 @@ void downsample_sc4(const int tab, const unsigned char *buffer, const int padded
  *   NBIN*NCHAN*NPOL*NSBLK => 1 x 384 x 1 x 500 bits equals or 24000 bytes
  */
 void pack_sc34() {
-  int *temp1;
+  unsigned int *temp1;
   unsigned char *temp2;
 
-  int dc, dt;
+  int dc;
   for (dc = 0; dc < NCHANNELS_LOW; dc++) {
 
     // First pass: calculate average(=offset) and stdev(=scale)
-    temp1 = downsampled;
-    int sum = 0;
-    int sos = 0;
+    temp1 = &downsampled[dc * NTIMES_LOW];
+    unsigned int sum = 0;
+    unsigned int sos = 0;
+
+    int dt;
+    // for (dt=dc*NTIMES_LOW; dt < (dc+1)*NTIMES_LOW; dt++) {
     for (dt=0; dt < NTIMES_LOW; dt++) {
       sos += (*temp1) * (*temp1);
       sum += *temp1++;
     }
     offset[dc] = sum / (1.0 * NTIMES_LOW);
-    scale[dc] = sqrt((sos / (1.0 * NTIMES_LOW)) - (sum / (1.0 * NTIMES_LOW)) * (sum / (1.0 * NTIMES_LOW)));
+    scale[dc] = sqrt((sos / (1.0 * NTIMES_LOW)) - offset[dc] * offset[dc]);
 
     // Set cutoff to 1 stdev above average
     int cutoff = offset[dc] + scale[dc];
 
     // Second pass: convert to 1 bit
-    temp1 = downsampled;
+    temp1 = &downsampled[dc * NTIMES_LOW];
     for (dt=0; dt < NTIMES_LOW; dt++) {
       *temp1++ = *temp1 > cutoff ? 1 : 0;
     }
@@ -307,13 +337,6 @@ void write_fits_packed(int tab, int rowid) {
   status = 0;
   if (fits_write_col(fptr, TBYTE,  17, rowid + 1, 1, NCHANNELS_LOW * NTIMES_LOW / 8, packed, &status)) {
     fits_error_and_exit(status, __LINE__);
-  }
-
-  // DEBUG OUTPUT
-  int i;
-  printf("Writing to row: %i\n", rowid);
-  for (i=0; i<NCHANNELS_LOW; i++) {
-    printf("%i\t%f\t%f\n", i, offset[i], scale[i]);
   }
 }
 
@@ -452,7 +475,6 @@ void parseOptions(int argc, char *argv[], char **key, int *padded_size, char **l
   }
 }
 
-
 int main (int argc, char *argv[]) {
   char *key;
   int padded_size;
@@ -519,10 +541,7 @@ int main (int argc, char *argv[]) {
     // Trap Ctr-C and kill commands to properly close fits files on exit
     signal(SIGTERM, fits_error_and_exit);
 
-    LOG("Requesting page: %i\n", page_count);
     page = ipcbuf_get_next_read(data_block, &bufsz);
-    LOG("Page read\n");
-
     if (! page) {
       quit = 1;
     } else {
@@ -541,9 +560,12 @@ int main (int argc, char *argv[]) {
             write_fits_packed(tab, page_count); // writes data from the packed, scale, and offset array
           }
         break;
+
         case 1: // stokes IQUV to dump
           // TODO
-        break;
+          exit(EXIT_FAILURE);
+          break;
+
         default:
           // should not happen
           fprintf(stderr, "Illegal science mode %i\n", science_mode);
