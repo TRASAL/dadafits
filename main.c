@@ -177,7 +177,7 @@ void downsample_sc3(const int tab, const unsigned char *buffer, const int padded
         ps3 += *s3++;
       }
       *temp1++ = ps0 + ps1 + ps2 + ps3;
-      LOG("value: %i\n", ps0+ps1+ps2+ps3);
+      // LOG("value: %i\n", ps0+ps1+ps2+ps3);
     }
   }
 }
@@ -231,10 +231,10 @@ void pack_sc34() {
     unsigned int sos = 0;
 
     int dt;
-    // for (dt=dc*NTIMES_LOW; dt < (dc+1)*NTIMES_LOW; dt++) {
     for (dt=0; dt < NTIMES_LOW; dt++) {
-      sos += (*temp1) * (*temp1);
-      sum += *temp1++;
+      unsigned int v = *temp1++;
+      sum += v;
+      sos += v * v;
     }
     offset[dc] = sum / (1.0 * NTIMES_LOW);
     scale[dc] = sqrt((sos / (1.0 * NTIMES_LOW)) - offset[dc] * offset[dc]);
