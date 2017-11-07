@@ -246,7 +246,7 @@ void dadafits_fits_init (char *template_file, char *output_directory) {
     fitsfile *fptr;
 
     if (output_directory) {
-      snprintf(fname, 256, "%s/beam%c.fits(%s)", 'A'+t, output_directory, template_file);
+      snprintf(fname, 256, "%s/beam%c.fits(%s)", output_directory, 'A'+t, template_file);
     } else {
       snprintf(fname, 256, "beam%c.fits(%s)", 'A'+t, template_file);
     }
