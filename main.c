@@ -53,7 +53,7 @@
 FILE *runlog = NULL;
 #define LOG(...) {fprintf(stdout, __VA_ARGS__); fprintf(runlog, __VA_ARGS__); fflush(stdout);}
 
-#define NTABS 12
+#define NTABS_MAX 12
 #define NCHANNELS 1536
 #define NCHANNELS_LOW (NCHANNELS / 4)
 
@@ -68,7 +68,7 @@ FILE *runlog = NULL;
 // the same for both science case 3 and 4
 #define NTIMES_LOW 500
 
-fitsfile *output[NTABS];
+fitsfile *output[NTABS_MAX];
 int downsampled[NCHANNELS_LOW * NTIMES_LOW];
 unsigned char packed[NCHANNELS_LOW * NTIMES_LOW / 8];
 float offset[NCHANNELS_LOW];
@@ -80,7 +80,7 @@ float scale[NCHANNELS_LOW];
 void close_fits() {
   int tab, status;
 
-  for (tab=0; tab<NTABS; tab++) {
+  for (tab=0; tab<NTABS_MAX; tab++) {
     if (output[tab]) {
       if (fits_close_file (output[tab], &status)) {
         if (runlog) fits_report_error(runlog, status);
@@ -233,14 +233,15 @@ void pack_sc34() {
  * Initialize the CFITSIO library
  * @param {char *} template_file    FITS template to use for creating initial file.
  * @param {char *} output_directory Directoy where output FITS files can be written.
+ * @param {int} ntabs               Number of beams
  */
-void dadafits_fits_init (char *template_file, char *output_directory) {
+void dadafits_fits_init (char *template_file, char *output_directory, int ntabs) {
   float version;
   fits_get_version(&version);
   LOG("Using FITS library version %f\n", version);
 
   int t;
-  for (t=0; t<NTABS; t++) {
+  for (t=0; t<ntabs; t++) {
     int status;
     char fname[256];
     fitsfile *fptr;
@@ -449,6 +450,7 @@ int main (int argc, char *argv[]) {
   char *output_directory = NULL; // defaults to CWD
   int science_case;
   int science_mode;
+  int ntabs;
 
   // parse commandline
   parseOptions(argc, argv, &key, &padded_size, &logfile, &science_case, &science_mode, &template_file, &output_directory);
@@ -469,34 +471,26 @@ int main (int argc, char *argv[]) {
   int nchannels;
   int row_size = 0;
 
-  switch (science_case) {
-    case 3:
-      if (science_mode == 0) { // I + TAB to be compressed and downsampled
-        row_size = NCHANNELS_LOW * NTIMES_LOW / 8;
-        nchannels = NCHANNELS_LOW;
-      } else if (science_mode == 1) { // IQUV + TAB
-      } else{
-        fprintf(stderr, "Illegal science mode %i for science case 3\n", science_mode);
-        exit(EXIT_FAILURE);
-      }
-      break;
-    case 4:
-      if (science_mode == 0) { // I + TAB to be compressed and downsampled
-        row_size = NCHANNELS_LOW * NTIMES_LOW / 8;
-        nchannels = NCHANNELS_LOW;
-      } else if (science_mode == 1) { // IQUV + TAB
-      } else{
-        fprintf(stderr, "Illegal science mode %i for science case 4\n", science_mode);
-        exit(EXIT_FAILURE);
-      }
-      break;
-    default:
-      fprintf(stderr, "Illegal science case %i\n", science_case);
-      exit(EXIT_FAILURE);
+  if (science_mode == 0) { // I + TAB to be compressed and downsampled
+    row_size = NCHANNELS_LOW * NTIMES_LOW / 8;
+    nchannels = NCHANNELS_LOW;
+    ntabs = 12;
+  } else if (science_mode == 1) { // IQUV + TAB
+    exit(EXIT_FAILURE);
+  } else if (science_mode == 2) { // I + IAB
+    row_size = NCHANNELS_LOW * NTIMES_LOW / 8;
+    nchannels = NCHANNELS_LOW;
+    ntabs = 1;
+  } else if (science_mode == 3) {
+    exit(EXIT_FAILURE);
+  } else {
+    fprintf(stderr, "Illegal science mode %i\n", science_mode);
+    exit(EXIT_FAILURE);
   }
+
   unsigned char *data = malloc(row_size);
 
-  dadafits_fits_init(template_file, output_directory);
+  dadafits_fits_init(template_file, output_directory, ntabs);
 
   dada_hdu_t *ringbuffer = init_ringbuffer(key);
   ipcbuf_t *data_block = (ipcbuf_t *) ringbuffer->data_block;
@@ -523,7 +517,8 @@ int main (int argc, char *argv[]) {
     } else {
       switch (science_mode) {
         case 0: // stokesI data to compress and downsample
-          for (tab = 0; tab < NTABS; tab++) {
+        case 2: // stokesI data to compress and downsample
+          for (tab = 0; tab < ntabs; tab++) {
             if (science_case == 3) {
               downsample_sc3(tab, page, padded_size); // moves data from the page to the downsampled array
             } else if (science_case == 4) {
@@ -534,6 +529,7 @@ int main (int argc, char *argv[]) {
           }
         break;
         case 1: // stokes IQUV to dump
+          // TODO
         break;
         default:
           // should not happen
