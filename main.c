@@ -94,8 +94,12 @@ void close_fits() {
  * pretty print the fits error to the log, and close down cleanly
  * @param {int} status The status code returned by the (failed) fits call
  */
-void fits_error_and_exit(int status) {
-  if (runlog) fits_report_error(runlog, status);
+void fits_error_and_exit(int status, int line) {
+  if (runlog) {
+    fprintf(runlog, "Fits error at line %i: ", line);
+    fits_report_error(runlog, status);
+  }
+  fprintf(stdout, "Fits error at line %i: ", line);
   fits_report_error(stdout, status);
 
   close_fits();
@@ -253,12 +257,12 @@ void dadafits_fits_init (char *template_file, char *output_directory, int ntabs)
     }
     LOG("Writing tab %02i to file %s\n", t, fname);
 
-    status = 0; if (fits_create_file(&fptr, fname, &status)) fits_error_and_exit(status);
-    status = 0; if (fits_movabs_hdu(fptr, 1, NULL, &status)) fits_error_and_exit(status);
-    status = 0; if (fits_write_date(fptr, &status))          fits_error_and_exit(status);
-    status = 0; if (fits_write_chksum(fptr, &status))        fits_error_and_exit(status);
+    status = 0; if (fits_create_file(&fptr, fname, &status)) fits_error_and_exit(status, __LINE__);
+    status = 0; if (fits_movabs_hdu(fptr, 1, NULL, &status)) fits_error_and_exit(status, __LINE__);
+    status = 0; if (fits_write_date(fptr, &status))          fits_error_and_exit(status, __LINE__);
+    status = 0; if (fits_write_chksum(fptr, &status))        fits_error_and_exit(status, __LINE__);
 
-    status = 0; if (fits_movabs_hdu(fptr, 2, NULL, &status)) fits_error_and_exit(status);
+    status = 0; if (fits_movabs_hdu(fptr, 2, NULL, &status)) fits_error_and_exit(status, __LINE__);
 
     output[t] = fptr;
   }
@@ -272,7 +276,7 @@ void dadafits_fits_init (char *template_file, char *output_directory, int ntabs)
  * @param {int} tab                Tight array beam index used to select output file
  * @param {int} rowid              Row number in the SUBINT table, corresponds to ringbuffer page number
  */
-void write_fits_mode0(int tab, int rowid) {
+void write_fits_packed(int tab, int rowid) {
   int status;
   fitsfile *fptr = output[tab];
 
@@ -287,22 +291,29 @@ void write_fits_mode0(int tab, int rowid) {
 
   status = 0;
   if (fits_insert_rows(fptr, rowid, 1, &status)) {
-    fits_error_and_exit(status);
+    fits_error_and_exit(status, __LINE__);
   }
 
   status = 0;
   if (fits_write_col(fptr, TFLOAT, 15, rowid + 1, 1, NCHANNELS_LOW, &offset, &status)) {
-    fits_error_and_exit(status);
+    fits_error_and_exit(status, __LINE__);
   }
 
   status = 0;
   if (fits_write_col(fptr, TFLOAT, 16, rowid + 1, 1, NCHANNELS_LOW, &scale, &status)) {
-    fits_error_and_exit(status);
+    fits_error_and_exit(status, __LINE__);
   }
 
   status = 0;
   if (fits_write_col(fptr, TBYTE,  17, rowid + 1, 1, NCHANNELS_LOW * NTIMES_LOW / 8, packed, &status)) {
-    fits_error_and_exit(status);
+    fits_error_and_exit(status, __LINE__);
+  }
+
+  // DEBUG OUTPUT
+  int i;
+  printf("Writing to row: %i\n", rowid);
+  for (i=0; i<NCHANNELS_LOW; i++) {
+    printf("%i\t%f\t%f\n", i, offset[i], scale[i]);
   }
 }
 
@@ -523,9 +534,11 @@ int main (int argc, char *argv[]) {
               downsample_sc3(tab, page, padded_size); // moves data from the page to the downsampled array
             } else if (science_case == 4) {
               downsample_sc4(tab, page, padded_size); // moves data from the page to the downsampled array
+            } else {
+              exit(EXIT_FAILURE);
             }
             pack_sc34(); // moves data from the downsampled array to the packed array, and sets scale and offset array
-            write_fits_mode0(tab, page_count); // writes data from the packed, scale, and offset array
+            write_fits_packed(tab, page_count); // writes data from the packed, scale, and offset array
           }
         break;
         case 1: // stokes IQUV to dump
