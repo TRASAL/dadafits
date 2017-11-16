@@ -20,16 +20,16 @@
  * Science case 3, mode 1:
  *          template: sc3_8bit_IQUV_full.txt
  *
- * Science case 3, mode 2:
- *          template: sc34_1bit_I_reduced.txt
+ *          A ringbuffer page is interpreted as an interleaved array of Stokes IQUV:
+ *          [tab][channel_offset][sequence_number][packet]
  *
- *          A ringbuffer page is interpreted as an array of Stokes I:
- *          [NTABS, NCHANNELS, padded_size] = [1, 1536, > 12500]
+ *          tab             := ranges from 0 to NTABS
+ *          channel_offset  := ranges from 0 to NCHANNELS/4 (384)
+ *          sequence_number := ranges from 0 to 25
  *
- *          The code reduces (by summation) from 12500 to 500 timesteps
- *          and from 1536 to 384 channels.
- *          Time dimension padding is required by other programes (GPU pipeline)
- *          that connects to the same ringbuffer.
+ *          with a packet: [t0 .. t499][c0 .. c3][IQUV] total of 500*4*4=8000 bytes
+ *          t = tn + sequence_number * 25
+ *          c = cn + channel_offset * 4
  *
  * Science case 4, mode 0:
  *          template: sc34_1bit_I_reduced.txt
@@ -45,17 +45,16 @@
  * Science case 4, mode 1:
  *          template: sc4_8bit_IQUV_full.txt
  *
- * Science case 4, mode 2:
- *          template: sc34_1bit_I_reduced.txt
+ *          A ringbuffer page is interpreted as an interleaved array of Stokes IQUV:
+ *          [tab][channel_offset][sequence_number][packet]
  *
- *          A ringbuffer page is interpreted as an array of Stokes I:
- *          [NTABS, NCHANNELS, padded_size] = [1, 1536, > 25000]
+ *          tab             := ranges from 0 to NTABS
+ *          channel_offset  := ranges from 0 to NCHANNELS/4 (384)
+ *          sequence_number := ranges from 0 to 50
  *
- *          The code reduces (by summation) from 25000 to 500 timesteps
- *          and from 1536 to 384 channels.
- *          Time dimension padding is required by other programes (GPU pipeline)
- *          that connects to the same ringbuffer.
- *
+ *          with a packet: [t0 .. t499][c0 .. c3][IQUV] total of 500*4*4=8000 bytes
+ *          t = tn + sequence_number * 50
+ *          c = cn + channel_offset * 4
  *
  * Author: Jisk Attema, Netherlands eScience Center
  * Licencse: Apache v2.0
@@ -514,13 +513,15 @@ int main (int argc, char *argv[]) {
     row_size = NCHANNELS_LOW * NTIMES_LOW / 8;
     nchannels = NCHANNELS_LOW;
     ntabs = 12;
-  } else if (science_mode == 1) { // IQUV + TAB
+  } else if (science_mode == 1) { // IQUV + TAB to deinterleave
+    ntabs = 12;
     exit(EXIT_FAILURE);
-  } else if (science_mode == 2) { // I + IAB
+  } else if (science_mode == 2) { // I + IAB to be compressed and downsampled
     row_size = NCHANNELS_LOW * NTIMES_LOW / 8;
     nchannels = NCHANNELS_LOW;
     ntabs = 1;
-  } else if (science_mode == 3) {
+  } else if (science_mode == 3) { // IQUV + IAB to deinterleave
+    ntabs = 1;
     exit(EXIT_FAILURE);
   } else {
     fprintf(stderr, "Illegal science mode %i\n", science_mode);
