@@ -90,6 +90,8 @@ FILE *runlog = NULL;
 #define NTIMES_LOW 500
 
 fitsfile *output[NTABS_MAX];
+int col_data, col_offset, col_scale, col_weights;
+
 unsigned int downsampled[NCHANNELS_LOW * NTIMES_LOW];
 unsigned char packed[NCHANNELS_LOW * NTIMES_LOW / 8];
 float offset[NCHANNELS_LOW];
@@ -269,13 +271,13 @@ void pack_sc34() {
  * @param {int} ntabs               Number of beams
  */
 void dadafits_fits_init (char *template_file, char *output_directory, int ntabs) {
+  int status;
   float version;
   fits_get_version(&version);
   LOG("Using FITS library version %f\n", version);
 
   int t;
   for (t=0; t<ntabs; t++) {
-    int status;
     char fname[256];
     fitsfile *fptr;
 
@@ -295,6 +297,12 @@ void dadafits_fits_init (char *template_file, char *output_directory, int ntabs)
 
     output[t] = fptr;
   }
+
+  // Get required column ID's
+  status = 0; if(fits_get_colnum(output[0], 0, "DATA", &col_data, &status)) fits_error_and_exit(status, __LINE__);
+  status = 0; if(fits_get_colnum(output[0], 0, "DAT_OFFS", &col_offset, &status)) fits_error_and_exit(status, __LINE__);
+  status = 0; if(fits_get_colnum(output[0], 0, "DAT_SCL", &col_scale, &status)) fits_error_and_exit(status, __LINE__);
+  status = 0; if(fits_get_colnum(output[0], 0, "DAT_WTS", &col_weights, &status)) fits_error_and_exit(status, __LINE__);
 }
 
 /**
@@ -329,18 +337,31 @@ void write_fits_packed(int tab, int rowid) {
     fits_error_and_exit(status, __LINE__);
   }
 
+  float weights[NCHANNELS_LOW];
+  {
+    int i;
+    for (i=0; i<NCHANNELS_LOW; i++) {
+      weights[i] = 1.0;
+    }
+  }
+
   status = 0;
-  if (fits_write_col(fptr, TFLOAT, 15, rowid + 1, 1, NCHANNELS_LOW, &offset, &status)) {
+  if (fits_write_col(fptr, TFLOAT, col_weights, rowid + 1, 1, NCHANNELS_LOW, &weights, &status)) {
     fits_error_and_exit(status, __LINE__);
   }
 
   status = 0;
-  if (fits_write_col(fptr, TFLOAT, 16, rowid + 1, 1, NCHANNELS_LOW, &scale, &status)) {
+  if (fits_write_col(fptr, TFLOAT, col_offset, rowid + 1, 1, NCHANNELS_LOW, &offset, &status)) {
     fits_error_and_exit(status, __LINE__);
   }
 
   status = 0;
-  if (fits_write_col(fptr, TBYTE,  17, rowid + 1, 1, NCHANNELS_LOW * NTIMES_LOW / 8, packed, &status)) {
+  if (fits_write_col(fptr, TFLOAT, col_scale, rowid + 1, 1, NCHANNELS_LOW, &scale, &status)) {
+    fits_error_and_exit(status, __LINE__);
+  }
+
+  status = 0;
+  if (fits_write_col(fptr, TBYTE,  col_data, rowid + 1, 1, NCHANNELS_LOW * NTIMES_LOW / 8, packed, &status)) {
     fits_error_and_exit(status, __LINE__);
   }
 }
