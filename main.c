@@ -563,23 +563,23 @@ int main (int argc, char *argv[]) {
   int page_count = 0;
   // char *page = NULL;
   
-    int mysize = NTABS_MAX * NCHANNELS * padded_size;
-    char *page = malloc(mysize);
+  int mysize = NTABS_MAX * NCHANNELS * padded_size;
+  char *page = malloc(mysize);
+
+  // Trap Ctr-C and kill commands to properly close fits files on exit
+  signal(SIGTERM, fits_error_and_exit);
+
     int kkk;
     for(kkk=0; kkk<mysize; kkk++) {
       page[kkk] = round(10.0 * rand()/RAND_MAX );
     }
-  
 
   // while(!quit && !ipcbuf_eod(data_block)) {
   while(!quit) {
     int tab; // tight array beam
 
-    // Trap Ctr-C and kill commands to properly close fits files on exit
-    signal(SIGTERM, fits_error_and_exit);
-
     // page = ipcbuf_get_next_read(data_block, &bufsz);
-    if (page_count == 100) {
+    if (page_count == 10) {
       page = NULL;
     }
 
