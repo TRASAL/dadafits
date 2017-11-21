@@ -76,7 +76,6 @@ FILE *runlog = NULL;
 
 #define NTABS_MAX 12
 #define NCHANNELS 1536
-#define NCHANNELS_LOW (NCHANNELS / 4)
 
 // 80 microsecond -> 2 milisecond
 #define SC3_NTIMES 12500
@@ -88,6 +87,7 @@ FILE *runlog = NULL;
 
 // the same for both science case 3 and 4
 #define NTIMES_LOW 500
+#define NCHANNELS_LOW (NCHANNELS / 4)
 
 // Variables read from ring buffer header
 float min_frequency = 1492;
@@ -459,8 +459,6 @@ dada_hdu_t *init_ringbuffer(char *key) {
   // parse header
   unsigned int uintValue;
   float floatValue[2];
-  ascii_header_get(header, "SAMPLES_PER_BATCH", "%d", &uintValue);
-  ascii_header_get(header, "CHANNELS", "%d", &uintValue);
   ascii_header_get(header, "MIN_FREQUENCY", "%f", &min_frequency);
   ascii_header_get(header, "CHANNEL_BANDWIDTH", "%f", &channel_bandwidth);
 
@@ -597,39 +595,38 @@ int main (int argc, char *argv[]) {
     exit(EXIT_FAILURE);
   }
 
-  unsigned char *data = malloc(row_size);
-
   dadafits_fits_init(template_file, output_directory, ntabs);
 
-  // dada_hdu_t *ringbuffer = init_ringbuffer(key);
-  // ipcbuf_t *data_block = (ipcbuf_t *) ringbuffer->data_block;
-  // ipcio_t *ipc = ringbuffer->data_block;
-
   int quit = 0;
-  // uint64_t bufsz = ipc->curbufsz;
-
   int page_count = 0;
-  // char *page = NULL;
-  
   int mysize = NTABS_MAX * NCHANNELS * padded_size;
-  char *page = malloc(mysize);
 
-  // Trap Ctr-C and kill commands to properly close fits files on exit
+  // Trap Ctr-C to properly close fits files on exit
   signal(SIGTERM, fits_error_and_exit);
 
+#ifdef DRY_RUN
+  // do 10 iterations with random data, ignore ringbuffer
+  char *page = malloc(mysize);
+
+  while(page_count < 10) {
     int kkk;
     for(kkk=0; kkk<mysize; kkk++) {
       page[kkk] = round(10.0 * rand()/RAND_MAX );
     }
+#else
+  // normal operation with ringbuffer
+  char *page = NULL;
 
-  // while(!quit && !ipcbuf_eod(data_block)) {
-  while(!quit) {
+  dada_hdu_t *ringbuffer = init_ringbuffer(key);
+  ipcbuf_t *data_block = (ipcbuf_t *) ringbuffer->data_block;
+  ipcio_t *ipc = ringbuffer->data_block;
+  uint64_t bufsz = ipc->curbufsz;
+
+  while(!quit && !ipcbuf_eod(data_block)) {
+    page = ipcbuf_get_next_read(data_block, &bufsz);
+#endif
+
     int tab; // tight array beam
-
-    // page = ipcbuf_get_next_read(data_block, &bufsz);
-    if (page_count == 10) {
-      page = NULL;
-    }
 
     if (! page) {
       quit = 1;
@@ -666,13 +663,16 @@ int main (int argc, char *argv[]) {
     }
   }
 
-  // if (ipcbuf_eod(data_block)) {
-  //   LOG("End of data received\n");
-  // }
+#ifndef DRY_RUN
+  if (ipcbuf_eod(data_block)) {
+    LOG("End of data received\n");
+  }
+
+  dada_hdu_unlock_read(ringbuffer);
+  dada_hdu_disconnect(ringbuffer);
+#endif
+
+  LOG("Read %i pages\n", page_count);
 
   close_fits();
-
-  // dada_hdu_unlock_read(ringbuffer);
-  // dada_hdu_disconnect(ringbuffer);
-  LOG("Read %i pages\n", page_count);
 }
