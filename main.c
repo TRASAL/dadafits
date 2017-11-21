@@ -125,6 +125,7 @@ int col_freqs = -1;
 int col_offset = -1;
 int col_scale = -1;
 int col_weights = -1;
+int col_offs_sub = -1;
 
 unsigned int downsampled[NCHANNELS_LOW * NTIMES_LOW];
 unsigned char packed[NCHANNELS_LOW * NTIMES_LOW / 8];
@@ -368,6 +369,7 @@ void dadafits_fits_init (char *template_file, char *output_directory, int ntabs)
   col_offset = dadafits_find_column("DAT_OFFS", output[0]);
   col_scale = dadafits_find_column("DAT_SCL", output[0]);
   col_weights = dadafits_find_column("DAT_WTS", output[0]);
+  col_offs_sub = dadafits_find_column("OFFS_SUB", output[0]);
 }
 
 /**
@@ -396,10 +398,14 @@ void write_fits_packed(int tab, int rowid) {
     fits_error_and_exit(status);
   }
 
-  double offs_sub = rowid + 1;
-  status = 0;
-  if (fits_write_col(fptr, TDOUBLE, 2, rowid + 1, 1, 1, &offs_sub, &status)) {
-    fits_error_and_exit(status);
+
+  if (col_offs_sub >= 0) {
+    double offs_sub = rowid + 1;
+
+    status = 0;
+    if (fits_write_col(fptr, TDOUBLE, col_offs_sub, rowid + 1, 1, 1, &offs_sub, &status)) {
+      fits_error_and_exit(status);
+    }
   }
 
   if (col_freqs >= 0) {
