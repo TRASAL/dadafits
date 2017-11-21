@@ -681,8 +681,11 @@ int main (int argc, char *argv[]) {
           quit = 1;
           break;
       }
-      // ipcbuf_mark_cleared((ipcbuf_t *) ipc);
+#ifdef DRY_RUN
       page_count++;
+#else
+      ipcbuf_mark_cleared((ipcbuf_t *) ipc);
+#endif
     }
   }
 
