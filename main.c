@@ -380,64 +380,59 @@ void dadafits_fits_init (char *template_file, char *output_directory, int ntabs)
  * @param {int} tab                Tight array beam index used to select output file
  * @param {int} rowid              Row number in the SUBINT table, corresponds to ringbuffer page number
  */
-void write_fits_packed(int tab, int rowid) {
+void write_fits_packed(int tab, long rowid) {
   int status;
   fitsfile *fptr = output[tab];
 
-  // fits_write_col parameters:
-  // type
-  // column
-  // firstrow
-  // firstelem
-  // nelement
-  // *array
-  // *status
+  // From the cfitsio documentation:
+  // Note that it is *not* necessary to insert rows in a table before writing data to those rows (indeed, it
+  // would be inefficient to do so). Instead, one may simply write data to any row of the table, whether
+  // that row of data already exists or not.
+  //
+  // status = 0;
+  // if (fits_insert_rows(fptr, rowid, 1, &status)) {
+  //   fits_error_and_exit(status);
+  // }
 
-  status = 0;
-  if (fits_insert_rows(fptr, rowid, 1, &status)) {
-    fits_error_and_exit(status);
-  }
-
+  double offs_sub = (double) rowid;
 
   if (col_offs_sub >= 0) {
-    double offs_sub = rowid + 1;
-
     status = 0;
-    if (fits_write_col(fptr, TDOUBLE, col_offs_sub, rowid + 1, 1, 1, &offs_sub, &status)) {
+    if (fits_write_col(fptr, TDOUBLE, col_offs_sub, rowid, 1, 1, &offs_sub, &status)) {
       fits_error_and_exit(status);
     }
   }
 
   if (col_freqs >= 0) {
     status = 0;
-    if (fits_write_col(fptr, TFLOAT, col_freqs, rowid + 1, 1, NCHANNELS_LOW, &freqs, &status)) {
+    if (fits_write_col(fptr, TFLOAT, col_freqs, rowid, 1, NCHANNELS_LOW, freqs, &status)) {
       fits_error_and_exit(status);
     }
   }
 
   if (col_weights >= 0) {
     status = 0;
-    if (fits_write_col(fptr, TFLOAT, col_weights, rowid + 1, 1, NCHANNELS_LOW, &weights, &status)) {
+    if (fits_write_col(fptr, TFLOAT, col_weights, rowid, 1, NCHANNELS_LOW, weights, &status)) {
       fits_error_and_exit(status);
     }
   }
 
   if (col_offset >= 0) {
     status = 0;
-    if (fits_write_col(fptr, TFLOAT, col_offset, rowid + 1, 1, NCHANNELS_LOW, &offset, &status)) {
+    if (fits_write_col(fptr, TFLOAT, col_offset, rowid, 1, NCHANNELS_LOW, offset, &status)) {
       fits_error_and_exit(status);
     }
   }
 
   if (col_scale >= 0) {
     status = 0;
-    if (fits_write_col(fptr, TFLOAT, col_scale, rowid + 1, 1, NCHANNELS_LOW, &scale, &status)) {
+    if (fits_write_col(fptr, TFLOAT, col_scale, rowid, 1, NCHANNELS_LOW, scale, &status)) {
       fits_error_and_exit(status);
     }
   }
 
   status = 0;
-  if (fits_write_col(fptr, TBYTE,  col_data, rowid + 1, 1, NCHANNELS_LOW * NTIMES_LOW / 8, packed, &status)) {
+  if (fits_write_col(fptr, TBYTE,  col_data, rowid, 1, NCHANNELS_LOW * NTIMES_LOW / 8, packed, &status)) {
     fits_error_and_exit(status);
   }
 }
@@ -575,6 +570,47 @@ void parseOptions(int argc, char *argv[], char **key, int *padded_size, char **l
   }
 }
 
+void deinterleave (const unsigned char *page, unsigned char *transposed, int science_case, int science_mode) {
+  int sequence_length, ntabs;
+
+  switch (science_case) {
+    case 3: sequence_length = 25; break;
+    case 4: sequence_length = 50; break;
+  }
+  switch (science_mode) {
+    case 1: ntabs = 12; break; // IQUV + TAB
+    case 3: ntabs = 1; break; // IQUV + IAB
+  }
+  // ring buffer page contains matrix:
+  //   [tab][channel_offset][sequence_number][8000]
+  //
+  // tab             : ranges from 0 to (1 or 12) mode TAB / IAB
+  // channel_offset  : ranges from 0 to NCHANNELS/4 (=1536/4=384)
+  // sequence_number : ranges from 0 to 25 or 50 (sc3 or sc4)
+  //
+  // the 8000 bytes are the original packets, containing stokes IQUV:
+  //   [t0 .. t499][c0 .. c3][the 4 components IQUV]
+  //
+  //   t0, .., t499 = sequence_number * 500 + tx
+  //   c0, c1, c2, c3 = curr_channel + 0, 1, 2, 3
+  //
+  // Transposed buffer will contain:
+  // (NBIN,NCHAN,NPOL,NSBLK) = (1,1536,4,12500) or (1,1536,4,25000); sc3 or sc4
+  int tab, channel_offset, sequence_number;
+  for (tab=0; tab < ntabs; tab++) {
+    for (channel_offset=0; channel_offset < 1536/4; channel_offset++) {
+      for (sequence_number=0; sequence_number < sequence_length; sequence_number++) {
+      }
+    }
+  }
+/*
+      memcpy(
+        &buf[(((packet->tab_index * NCHANNELS/4) + curr_channel / 4) * sequence_length) * PAYLOADSIZE_STOKESIQUV],
+        packet->record, PAYLOADSIZE_STOKESIQUV);
+*/
+
+}
+
 int main (int argc, char *argv[]) {
   char *key;
   int padded_size;
@@ -626,7 +662,7 @@ int main (int argc, char *argv[]) {
   dadafits_fits_init(template_file, output_directory, ntabs);
 
   int quit = 0;
-  int page_count = 0;
+  long page_count = 0;
   int mysize = NTABS_MAX * NCHANNELS * padded_size;
 
   // Trap Ctr-C to properly close fits files on exit
@@ -671,7 +707,7 @@ int main (int argc, char *argv[]) {
               exit(EXIT_FAILURE);
             }
             pack_sc34(); // moves data from the downsampled array to the packed array, and sets scale and offset array
-            write_fits_packed(tab, page_count); // writes data from the packed, scale, and offset array
+            write_fits_packed(tab, page_count + 1); // writes data from the packed, scale, and offset array
           }
         break;
 
@@ -703,7 +739,7 @@ int main (int argc, char *argv[]) {
   dada_hdu_disconnect(ringbuffer);
 #endif
 
-  LOG("Read %i pages\n", page_count);
+  LOG("Read %li pages\n", page_count);
 
   close_fits();
 }
