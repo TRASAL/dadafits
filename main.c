@@ -89,13 +89,27 @@ FILE *runlog = NULL;
 // the same for both science case 3 and 4
 #define NTIMES_LOW 500
 
+// Variables read from ring buffer header
+float min_frequency = 1492;
+float channel_bandwidth = 0.1953125;
+
+// Variables used for FITS output
 fitsfile *output[NTABS_MAX];
-int col_data, col_offset, col_scale, col_weights;
+
+// Fit column ID's, looked up from the template.
+// If not present in the template, it is set to '-1' and not written
+int col_data = -1;
+int col_freqs = -1;
+int col_offset = -1;
+int col_scale = -1;
+int col_weights = -1;
 
 unsigned int downsampled[NCHANNELS_LOW * NTIMES_LOW];
 unsigned char packed[NCHANNELS_LOW * NTIMES_LOW / 8];
 float offset[NCHANNELS_LOW];
 float scale[NCHANNELS_LOW];
+float weights[NCHANNELS_LOW];
+float freqs[NCHANNELS_LOW];
 
 /**
  * Close all opened fits files
@@ -122,12 +136,10 @@ void close_fits() {
  * pretty print the fits error to the log, and close down cleanly
  * @param {int} status The status code returned by the (failed) fits call
  */
-void fits_error_and_exit(int status, int line) {
+void fits_error_and_exit(int status) {
   if (runlog) {
-    fprintf(runlog, "Fits error at line %i: ", line);
     fits_report_error(runlog, status);
   }
-  fprintf(stdout, "Fits error at line %i: ", line);
   fits_report_error(stdout, status);
 
   close_fits();
@@ -263,6 +275,27 @@ void pack_sc34() {
     temp2++;
   }
 }
+/**
+ * Retrun the column id for the parameter with the given name,
+ * -1 when not found
+ */
+int dadafits_find_column(char *name, fitsfile *file) {
+  int column = -1;
+  int status = 0;
+
+  fits_get_colnum(file, 0, name, &column, &status);
+  if (status != 0) {
+    if (status == 219) {
+      // not found
+      column = -1;
+    } else {
+      // different error, abort
+      fits_error_and_exit(status);
+    }
+  }
+  LOG("%15s to column: %i\n", name, column);
+  return column;
+}
 
 /**
  * Initialize the CFITSIO library
@@ -288,21 +321,31 @@ void dadafits_fits_init (char *template_file, char *output_directory, int ntabs)
     }
     LOG("Writing tab %02i to file %s\n", t, fname);
 
-    status = 0; if (fits_create_file(&fptr, fname, &status)) fits_error_and_exit(status, __LINE__);
-    status = 0; if (fits_movabs_hdu(fptr, 1, NULL, &status)) fits_error_and_exit(status, __LINE__);
-    status = 0; if (fits_write_date(fptr, &status))          fits_error_and_exit(status, __LINE__);
-    status = 0; if (fits_write_chksum(fptr, &status))        fits_error_and_exit(status, __LINE__);
+    status = 0; if (fits_create_file(&fptr, fname, &status)) fits_error_and_exit(status);
+    status = 0; if (fits_movabs_hdu(fptr, 1, NULL, &status)) fits_error_and_exit(status);
+    status = 0; if (fits_write_date(fptr, &status))          fits_error_and_exit(status);
+    status = 0; if (fits_write_chksum(fptr, &status))        fits_error_and_exit(status);
 
-    status = 0; if (fits_movabs_hdu(fptr, 2, NULL, &status)) fits_error_and_exit(status, __LINE__);
+    status = 0; if (fits_movabs_hdu(fptr, 2, NULL, &status)) fits_error_and_exit(status);
 
     output[t] = fptr;
   }
 
+  // Set scaling, weights, and offsets to neutral values
+  int i;
+  for (i=0; i<NCHANNELS_LOW; i++) {
+    offset[i] = 0.0;
+    scale[i] = 1.0;
+    weights[i] = 1.0;
+    freqs[i] = min_frequency + 4.0 * i * channel_bandwidth;
+  }
+
   // Get required column ID's
-  status = 0; if(fits_get_colnum(output[0], 0, "DATA", &col_data, &status)) fits_error_and_exit(status, __LINE__);
-  status = 0; if(fits_get_colnum(output[0], 0, "DAT_OFFS", &col_offset, &status)) fits_error_and_exit(status, __LINE__);
-  status = 0; if(fits_get_colnum(output[0], 0, "DAT_SCL", &col_scale, &status)) fits_error_and_exit(status, __LINE__);
-  status = 0; if(fits_get_colnum(output[0], 0, "DAT_WTS", &col_weights, &status)) fits_error_and_exit(status, __LINE__);
+  col_freqs = dadafits_find_column("DAT_FREQ", output[0]);
+  col_data = dadafits_find_column("DATA", output[0]);
+  col_offset = dadafits_find_column("DAT_OFFS", output[0]);
+  col_scale = dadafits_find_column("DAT_SCL", output[0]);
+  col_weights = dadafits_find_column("DAT_WTS", output[0]);
 }
 
 /**
@@ -328,41 +371,46 @@ void write_fits_packed(int tab, int rowid) {
 
   status = 0;
   if (fits_insert_rows(fptr, rowid, 1, &status)) {
-    fits_error_and_exit(status, __LINE__);
+    fits_error_and_exit(status);
   }
 
   double offs_sub = rowid + 1;
   status = 0;
   if (fits_write_col(fptr, TDOUBLE, 2, rowid + 1, 1, 1, &offs_sub, &status)) {
-    fits_error_and_exit(status, __LINE__);
+    fits_error_and_exit(status);
   }
 
-  float weights[NCHANNELS_LOW];
-  {
-    int i;
-    for (i=0; i<NCHANNELS_LOW; i++) {
-      weights[i] = 1.0;
+  if (col_freqs >= 0) {
+    status = 0;
+    if (fits_write_col(fptr, TFLOAT, col_freqs, rowid + 1, 1, NCHANNELS_LOW, &freqs, &status)) {
+      fits_error_and_exit(status);
+    }
+  }
+
+  if (col_weights >= 0) {
+    status = 0;
+    if (fits_write_col(fptr, TFLOAT, col_weights, rowid + 1, 1, NCHANNELS_LOW, &weights, &status)) {
+      fits_error_and_exit(status);
+    }
+  }
+
+  if (col_offset >= 0) {
+    status = 0;
+    if (fits_write_col(fptr, TFLOAT, col_offset, rowid + 1, 1, NCHANNELS_LOW, &offset, &status)) {
+      fits_error_and_exit(status);
+    }
+  }
+
+  if (col_scale >= 0) {
+    status = 0;
+    if (fits_write_col(fptr, TFLOAT, col_scale, rowid + 1, 1, NCHANNELS_LOW, &scale, &status)) {
+      fits_error_and_exit(status);
     }
   }
 
   status = 0;
-  if (fits_write_col(fptr, TFLOAT, col_weights, rowid + 1, 1, NCHANNELS_LOW, &weights, &status)) {
-    fits_error_and_exit(status, __LINE__);
-  }
-
-  status = 0;
-  if (fits_write_col(fptr, TFLOAT, col_offset, rowid + 1, 1, NCHANNELS_LOW, &offset, &status)) {
-    fits_error_and_exit(status, __LINE__);
-  }
-
-  status = 0;
-  if (fits_write_col(fptr, TFLOAT, col_scale, rowid + 1, 1, NCHANNELS_LOW, &scale, &status)) {
-    fits_error_and_exit(status, __LINE__);
-  }
-
-  status = 0;
   if (fits_write_col(fptr, TBYTE,  col_data, rowid + 1, 1, NCHANNELS_LOW * NTIMES_LOW / 8, packed, &status)) {
-    fits_error_and_exit(status, __LINE__);
+    fits_error_and_exit(status);
   }
 }
 
@@ -413,8 +461,8 @@ dada_hdu_t *init_ringbuffer(char *key) {
   float floatValue[2];
   ascii_header_get(header, "SAMPLES_PER_BATCH", "%d", &uintValue);
   ascii_header_get(header, "CHANNELS", "%d", &uintValue);
-  ascii_header_get(header, "MIN_FREQUENCY", "%f", &floatValue[0]);
-  ascii_header_get(header, "CHANNEL_BANDWIDTH", "%f", &floatValue[1]);
+  ascii_header_get(header, "MIN_FREQUENCY", "%f", &min_frequency);
+  ascii_header_get(header, "CHANNEL_BANDWIDTH", "%f", &channel_bandwidth);
 
   // tell the ringbuffer the header has been read
   if (ipcbuf_mark_cleared(hdu->header_block) < 0) {
