@@ -31,6 +31,17 @@
  *          t = tn + sequence_number * 25
  *          c = cn + channel_offset * 4
  *
+ * Science case 3, mode 2:
+ *          template: sc34_1bit_I_reduced.txt
+ *
+ *          A ringbuffer page is interpreted as an array of Stokes I:
+ *          [NTABS, NCHANNELS, padded_size] = [1, 1536, > 12500]
+ *
+ *          The code reduces (by summation) from 12500 to 500 timesteps
+ *          and from 1536 to 384 channels.
+ *          Time dimension padding is required by other programes (GPU pipeline)
+ *          that connects to the same ringbuffer.
+ *
  * Science case 4, mode 0:
  *          template: sc34_1bit_I_reduced.txt
  *
@@ -55,6 +66,17 @@
  *          with a packet: [t0 .. t499][c0 .. c3][IQUV] total of 500*4*4=8000 bytes
  *          t = tn + sequence_number * 50
  *          c = cn + channel_offset * 4
+ *
+ * Science case 4, mode 0:
+ *          template: sc34_1bit_I_reduced.txt
+ *
+ *          A ringbuffer page is interpreted as an array of Stokes I:
+ *          [NTABS, NCHANNELS, padded_size] = [1, 1536, > 25000]
+ *
+ *          The code reduces (by summation) from 25000 to 500 timesteps
+ *          and from 1536 to 384 channels.
+ *          Time dimension padding is required by other programes (GPU pipeline)
+ *          that connects to the same ringbuffer.
  *
  * Author: Jisk Attema, Netherlands eScience Center
  * Licencse: Apache v2.0
@@ -648,6 +670,7 @@ int main (int argc, char *argv[]) {
         break;
 
         case 1: // stokes IQUV to dump
+        case 3: // stokes IQUV to dump
           // TODO
           exit(EXIT_FAILURE);
           break;
