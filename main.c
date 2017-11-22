@@ -270,25 +270,26 @@ void pack_sc34() {
     temp1 = &downsampled[dc * NTIMES_LOW];
 
     // Sum:
-    // we are summing around 200 unsigned chars, so maximum value is
-    // 200 * 256 = 52100
+    // total sum is over 25000 samples times 4 frequencies is 100,000 samples (50,000 for sc3)
+    // maxium value is 100000 * 255 = 5,500,000
+    // an unsigned int should hold 4,294,967,295, so no overflow here
     //
     // Sos:
-    // we are summing around 200 unsigned chars*chars, maximum value is
-    // (256 * 256) * 200 = 13,107,200
+    // maxium value of a downsampled sample is 255 * 50 * 4 = 51,000
+    // of these, we are summing 500 squares, so maximum value is
+    //             51000 * 51000 * 500 = 1,300,500,000,000
+    // unsigned long long holds 18,446,744,073,709,551,615, so ok.
     //
-    // an unsigned int should hold 4,294,967,295, so no overflow here
     unsigned int sum = 0;
-    unsigned int sos = 0;
+    unsigned long long sos = 0;
 
     int dt;
-    // for (dt=dc*NTIMES_LOW; dt < (dc+1)*NTIMES_LOW; dt++) {
     for (dt=0; dt < NTIMES_LOW; dt++) {
       sos += (*temp1) * (*temp1);
       sum += *temp1++;
     }
     offset[dc] = sum / (1.0 * NTIMES_LOW);
-    scale[dc] = sqrtf((sos / (1.0 * NTIMES_LOW)) - offset[dc] * offset[dc]);
+    scale[dc]  = sqrtf(sos / (1.0 * NTIMES_LOW) - offset[dc] * offset[dc]);
 
     // Set cutoff to 1 stdev above average
     unsigned int cutoff = offset[dc] + scale[dc];
