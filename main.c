@@ -397,7 +397,7 @@ void write_fits_packedI(int tab, long rowid) {
   //   fits_error_and_exit(status);
   // }
 
-  double offs_sub = (double) rowid * 1.024;
+  double offs_sub = (double) (rowid-1) * 1.024; // OFFS_SUB is in seconds since start of run
 
   if (col_offs_sub >= 0) {
     status = 0;
@@ -750,7 +750,7 @@ int main (int argc, char *argv[]) {
             pack_sc34();
 
             // write data from the packed, scale, and offset arrays
-            write_fits_packedI(tab, page_count + 1);
+            write_fits_packedI(tab, page_count + 1); // pagecount starts at 0, but FITS rowid at 1
           }
         break;
 
@@ -762,7 +762,7 @@ int main (int argc, char *argv[]) {
 
           for (tab = 0; tab < ntabs; tab++) {
             // write data from transposed buffer
-            // write_fits_IQUV(tab, page_count + 1);
+            write_fits_IQUV(tab, page_count + 1); // pagecount starts at 0, but FITS rowid at 1
           }
           break;
 
