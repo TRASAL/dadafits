@@ -394,7 +394,7 @@ void write_fits_packed(int tab, long rowid) {
   //   fits_error_and_exit(status);
   // }
 
-  double offs_sub = (double) rowid;
+  double offs_sub = (double) rowid * 1.024;
 
   if (col_offs_sub >= 0) {
     status = 0;
