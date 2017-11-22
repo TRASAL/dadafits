@@ -569,18 +569,14 @@ void parseOptions(int argc, char *argv[], char **key, int *padded_size, char **l
     exit(EXIT_FAILURE);
   }
 }
-
+/**
+ * Deinterleave (transpose) an IQUV ring buffer page to the ordering needed for FITS files
+ * Note that this is probably a slow function, and is not meant to be run real-time
+ * Suggested use is:
+ *   1. realtime: ringbuffer -> [trigger] -> dada_dbdisk  
+ *   2. offline: dada_dbdisk -> ringbuffer -> dadafits
+ */
 void deinterleave (const unsigned char *page, unsigned char *transposed, int science_case, int science_mode) {
-  int sequence_length, ntabs;
-
-  switch (science_case) {
-    case 3: sequence_length = 25; break;
-    case 4: sequence_length = 50; break;
-  }
-  switch (science_mode) {
-    case 1: ntabs = 12; break; // IQUV + TAB
-    case 3: ntabs = 1; break; // IQUV + IAB
-  }
   // ring buffer page contains matrix:
   //   [tab][channel_offset][sequence_number][8000]
   //
@@ -596,19 +592,41 @@ void deinterleave (const unsigned char *page, unsigned char *transposed, int sci
   //
   // Transposed buffer will contain:
   // (NBIN,NCHAN,NPOL,NSBLK) = (1,1536,4,12500) or (1,1536,4,25000); sc3 or sc4
+  int sequence_length, ntabs;
+
+  switch (science_case) {
+    case 3: sequence_length = 25; break;
+    case 4: sequence_length = 50; break;
+  }
+  switch (science_mode) {
+    case 1: ntabs = 12; break; // IQUV + TAB
+    case 3: ntabs = 1; break; // IQUV + IAB
+  }
+
+  // Tranpose by linearly processing original packets from the page
+  const unsigned char *packet = page;
+
+  // and find the matching address in the transposed buffer
   int tab, channel_offset, sequence_number;
   for (tab=0; tab < ntabs; tab++) {
     for (channel_offset=0; channel_offset < 1536/4; channel_offset++) {
       for (sequence_number=0; sequence_number < sequence_length; sequence_number++) {
+
+        // process packet
+        int tn,cn,pn;
+        for (tn=0; tn < 500; tn++) {
+          int time = sequence_number * sequence_length + tn;
+          for (cn=0; cn < 4; cn++) {
+            int channel = channel_offset + cn;
+            for (pn=0; pn < 4; pn++) {
+              transposed[((channel * 4) + pn) * 500 * sequence_length + time] = *packet++;
+            }
+          }
+        }
+        // next packet
       }
     }
   }
-/*
-      memcpy(
-        &buf[(((packet->tab_index * NCHANNELS/4) + curr_channel / 4) * sequence_length) * PAYLOADSIZE_STOKESIQUV],
-        packet->record, PAYLOADSIZE_STOKESIQUV);
-*/
-
 }
 
 int main (int argc, char *argv[]) {
