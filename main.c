@@ -98,6 +98,7 @@ FILE *runlog = NULL;
 
 #define NTABS_MAX 12
 #define NCHANNELS 1536
+#define NPOLS 4
 
 // 80 microsecond -> 2 milisecond
 #define SC3_NTIMES 12500
@@ -129,10 +130,11 @@ int col_offs_sub = -1;
 
 unsigned int downsampled[NCHANNELS_LOW * NTIMES_LOW];
 unsigned char packed[NCHANNELS_LOW * NTIMES_LOW / 8];
-float offset[NCHANNELS_LOW];
-float scale[NCHANNELS_LOW];
-float weights[NCHANNELS_LOW];
-float freqs[NCHANNELS_LOW];
+unsigned char transposed[NTABS_MAX * NCHANNELS * NPOLS * SC4_NTIMES]; // big enough for largest case
+float offset[NCHANNELS];
+float scale[NCHANNELS];
+float weights[NCHANNELS];
+float freqs[NCHANNELS];
 
 /**
  * Close all opened fits files
@@ -325,8 +327,9 @@ int dadafits_find_column(char *name, fitsfile *file) {
  * @param {char *} template_file    FITS template to use for creating initial file.
  * @param {char *} output_directory Directoy where output FITS files can be written.
  * @param {int} ntabs               Number of beams
+ * @param {float } bandwidth        Bandwith per channel, after optional downsampling
  */
-void dadafits_fits_init (char *template_file, char *output_directory, int ntabs) {
+void dadafits_fits_init (char *template_file, char *output_directory, int ntabs, float bandwidth) {
   int status;
   float version;
   fits_get_version(&version);
@@ -356,11 +359,11 @@ void dadafits_fits_init (char *template_file, char *output_directory, int ntabs)
 
   // Set scaling, weights, and offsets to neutral values
   int i;
-  for (i=0; i<NCHANNELS_LOW; i++) {
+  for (i=0; i<NCHANNELS; i++) {
     offset[i] = 0.0;
     scale[i] = 1.0;
     weights[i] = 1.0;
-    freqs[i] = min_frequency + 4.0 * i * channel_bandwidth;
+    freqs[i] = min_frequency + i * bandwidth;
   }
 
   // Get required column ID's
@@ -380,7 +383,7 @@ void dadafits_fits_init (char *template_file, char *output_directory, int ntabs)
  * @param {int} tab                Tight array beam index used to select output file
  * @param {int} rowid              Row number in the SUBINT table, corresponds to ringbuffer page number
  */
-void write_fits_packed(int tab, long rowid) {
+void write_fits_packedI(int tab, long rowid) {
   int status;
   fitsfile *fptr = output[tab];
 
@@ -519,7 +522,7 @@ void parseOptions(int argc, char *argv[], char **key, int *padded_size, char **l
         *template_file = strdup(optarg);
         sett=1;
         break;
-        
+
       // OPTIONAL: -d <output_directory>
       // DEFAULT: CWD
       case('d'):
@@ -573,10 +576,10 @@ void parseOptions(int argc, char *argv[], char **key, int *padded_size, char **l
  * Deinterleave (transpose) an IQUV ring buffer page to the ordering needed for FITS files
  * Note that this is probably a slow function, and is not meant to be run real-time
  * Suggested use is:
- *   1. realtime: ringbuffer -> [trigger] -> dada_dbdisk  
+ *   1. realtime: ringbuffer -> [trigger] -> dada_dbdisk
  *   2. offline: dada_dbdisk -> ringbuffer -> dadafits
  */
-void deinterleave (const unsigned char *page, unsigned char *transposed, int science_case, int science_mode) {
+void deinterleave (const unsigned char *page, int science_case, int science_mode) {
   // ring buffer page contains matrix:
   //   [tab][channel_offset][sequence_number][8000]
   //
@@ -607,23 +610,26 @@ void deinterleave (const unsigned char *page, unsigned char *transposed, int sci
   const unsigned char *packet = page;
 
   // and find the matching address in the transposed buffer
-  int tab, channel_offset, sequence_number;
-  for (tab=0; tab < ntabs; tab++) {
-    for (channel_offset=0; channel_offset < 1536/4; channel_offset++) {
-      for (sequence_number=0; sequence_number < sequence_length; sequence_number++) {
-
+  int tab = 0;
+  for (tab = 0; tab < ntabs; tab++) {
+    int channel_offset = 0;
+    for (channel_offset = 0; channel_offset < NCHANNELS; channel_offset+=4) {
+      int sequence_number = 0;
+      for (sequence_number = 0; sequence_number < sequence_length; sequence_number++) {
         // process packet
         int tn,cn,pn;
-        for (tn=0; tn < 500; tn++) {
-          int time = sequence_number * sequence_length + tn;
-          for (cn=0; cn < 4; cn++) {
-            int channel = channel_offset + cn;
-            for (pn=0; pn < 4; pn++) {
-              transposed[((channel * 4) + pn) * 500 * sequence_length + time] = *packet++;
+        for (tn = 0; tn < 500; tn++) { // 500 samples per packet
+          for (cn = 0; cn < 4; cn++) { // 4 channels per packet
+            for (pn = 0; pn < NPOLS; pn++) {
+              transposed[
+                ((tab * NCHANNELS +
+                  cn + channel_offset) * NPOLS +
+                 pn) * sequence_length * 500 +
+                  tn + sequence_number * 500
+              ] = *packet++;
             }
           }
         }
-        // next packet
       }
     }
   }
@@ -663,46 +669,59 @@ int main (int argc, char *argv[]) {
     nchannels = NCHANNELS_LOW;
     ntabs = 12;
   } else if (science_mode == 1) { // IQUV + TAB to deinterleave
+    nchannels = NCHANNELS;
     ntabs = 12;
-    exit(EXIT_FAILURE);
   } else if (science_mode == 2) { // I + IAB to be compressed and downsampled
     row_size = NCHANNELS_LOW * NTIMES_LOW / 8;
     nchannels = NCHANNELS_LOW;
     ntabs = 1;
   } else if (science_mode == 3) { // IQUV + IAB to deinterleave
+    nchannels = NCHANNELS;
     ntabs = 1;
-    exit(EXIT_FAILURE);
   } else {
     fprintf(stderr, "Illegal science mode %i\n", science_mode);
     exit(EXIT_FAILURE);
   }
 
-  dadafits_fits_init(template_file, output_directory, ntabs);
-
   int quit = 0;
   long page_count = 0;
-  int mysize = NTABS_MAX * NCHANNELS * padded_size;
 
   // Trap Ctr-C to properly close fits files on exit
   signal(SIGTERM, fits_error_and_exit);
 
 #ifdef DRY_RUN
   // do 10 iterations with random data, ignore ringbuffer
+  int mysize = NTABS_MAX * NCHANNELS * padded_size * 4; // IQUV
   char *page = malloc(mysize);
+
+  dadafits_fits_init(template_file, output_directory, ntabs,
+      channel_bandwidth * NCHANNELS / nchannels);
+
+  int g_seed = 1234;
+  inline unsigned char fastrand() {
+    g_seed = (214013*g_seed+2531011);
+    // return (g_seed>>16)&0x7FFF;
+    return (g_seed>>16)&0xFF;
+  }
 
   while(page_count < 10) {
     int kkk;
     for(kkk=0; kkk<mysize; kkk++) {
-      page[kkk] = round(10.0 * rand()/RAND_MAX );
+      page[kkk] = fastrand();
     }
 #else
   // normal operation with ringbuffer
   char *page = NULL;
 
+  // must init ringbuffer before fits, as this reads parameters
+  // like channel_bandwidth from ring buffer header
   dada_hdu_t *ringbuffer = init_ringbuffer(key);
   ipcbuf_t *data_block = (ipcbuf_t *) ringbuffer->data_block;
   ipcio_t *ipc = ringbuffer->data_block;
   uint64_t bufsz = ipc->curbufsz;
+
+  dadafits_fits_init(template_file, output_directory, ntabs,
+      channel_bandwidth * NCHANNELS / nchannels);
 
   while(!quit && !ipcbuf_eod(data_block)) {
     page = ipcbuf_get_next_read(data_block, &bufsz);
@@ -714,25 +733,37 @@ int main (int argc, char *argv[]) {
       quit = 1;
     } else {
       switch (science_mode) {
-        case 0: // stokesI data to compress and downsample
-        case 2: // stokesI data to compress and downsample
+        // stokesI data to compress, downsample, and write
+        case 0:
+        case 2:
           for (tab = 0; tab < ntabs; tab++) {
+            // move data from the page to the downsampled array
             if (science_case == 3) {
-              downsample_sc3(tab, page, padded_size); // moves data from the page to the downsampled array
+              downsample_sc3(tab, page, padded_size);
             } else if (science_case == 4) {
-              downsample_sc4(tab, page, padded_size); // moves data from the page to the downsampled array
+              downsample_sc4(tab, page, padded_size);
             } else {
               exit(EXIT_FAILURE);
             }
-            pack_sc34(); // moves data from the downsampled array to the packed array, and sets scale and offset array
-            write_fits_packed(tab, page_count + 1); // writes data from the packed, scale, and offset array
+            // pack data from the downsampled array to the packed array,
+            // and set scale and offset arrays with used values
+            pack_sc34();
+
+            // write data from the packed, scale, and offset arrays
+            write_fits_packedI(tab, page_count + 1);
           }
         break;
 
-        case 1: // stokes IQUV to dump
-        case 3: // stokes IQUV to dump
-          // TODO
-          exit(EXIT_FAILURE);
+        // stokesIQUV data to write
+        case 1:
+        case 3:
+          // transpose data from page to transposed buffer
+          deinterleave(page, science_case, science_mode);
+
+          for (tab = 0; tab < ntabs; tab++) {
+            // write data from transposed buffer
+            // write_fits_IQUV(tab, page_count + 1);
+          }
           break;
 
         default:
