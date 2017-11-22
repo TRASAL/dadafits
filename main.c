@@ -428,7 +428,7 @@ void write_fits_IQUV(int tab, long rowid, int rowlength) {
   //   fits_error_and_exit(status);
   // }
 
-  double offs_sub = (double) (rowid-1) * 1.024; // OFFS_SUB is in seconds since start of run
+  double offs_sub = (double) rowid * 1.024; // OFFS_SUB is in seconds since start of run, but may not be zero
 
   if (col_offs_sub >= 0) {
     status = 0;
@@ -472,7 +472,7 @@ void write_fits_packedI(int tab, long rowid) {
   //   fits_error_and_exit(status);
   // }
 
-  double offs_sub = (double) (rowid-1) * 1.024; // OFFS_SUB is in seconds since start of run
+  double offs_sub = (double) rowid * 1.024; // OFFS_SUB is in seconds since start of run, but may not be zero
 
   if (col_offs_sub >= 0) {
     status = 0;
