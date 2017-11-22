@@ -89,6 +89,8 @@
 #include <fitsio.h>
 #include <math.h>
 #include <signal.h>
+#include <fenv.h>
+#include <errno.h>
 
 #include "dada_hdu.h"
 #include "ascii_header.h"
@@ -257,11 +259,25 @@ void pack_sc34() {
   unsigned int *temp1;
   unsigned char *temp2;
 
+  // DEBUG NaNs:
+  errno = 0;
+  feclearexcept(FE_ALL_EXCEPT);
+
   int dc;
   for (dc = 0; dc < NCHANNELS_LOW; dc++) {
 
     // First pass: calculate average(=offset) and stdev(=scale)
     temp1 = &downsampled[dc * NTIMES_LOW];
+
+    // Sum:
+    // we are summing around 200 unsigned chars, so maximum value is
+    // 200 * 256 = 52100
+    //
+    // Sos:
+    // we are summing around 200 unsigned chars*chars, maximum value is
+    // (256 * 256) * 200 = 13,107,200
+    //
+    // an unsigned int should hold 4,294,967,295, so no overflow here
     unsigned int sum = 0;
     unsigned int sos = 0;
 
@@ -272,10 +288,10 @@ void pack_sc34() {
       sum += *temp1++;
     }
     offset[dc] = sum / (1.0 * NTIMES_LOW);
-    scale[dc] = sqrt((sos / (1.0 * NTIMES_LOW)) - offset[dc] * offset[dc]);
+    scale[dc] = sqrtf((sos / (1.0 * NTIMES_LOW)) - offset[dc] * offset[dc]);
 
     // Set cutoff to 1 stdev above average
-    int cutoff = offset[dc] + scale[dc];
+    unsigned int cutoff = offset[dc] + scale[dc];
 
     // Second pass: convert to 1 bit
     temp1 = &downsampled[dc * NTIMES_LOW];
@@ -299,7 +315,21 @@ void pack_sc34() {
     *temp2 += *temp1++ ? 1      : 0;
     temp2++;
   }
+
+  // DEBUG NaNs:
+  int except = fetestexcept(FE_INVALID | FE_DIVBYZERO | FE_OVERFLOW | FE_UNDERFLOW);
+  if (errno || except) {
+    LOG("Error in packing data: errn=%i, fetestexcept=", errno);
+    switch (except) {
+      case FE_INVALID: printf("FE_INVALID\n"); break;
+      case FE_DIVBYZERO: printf("FE_DIVBYZERO\n"); break;
+      case FE_OVERFLOW: printf("FE_OVERFLOW\n"); break;
+      case FE_UNDERFLOW: printf("FE_UNDERFLOW\n"); break;
+      default: printf("-\n");
+    }
+  }
 }
+
 /**
  * Retrun the column id for the parameter with the given name,
  * -1 when not found
@@ -376,12 +406,57 @@ void dadafits_fits_init (char *template_file, char *output_directory, int ntabs,
 }
 
 /**
+ * Write a row of 8-bits Stokes IQUV data a FITS BINTABLE.SUBINT
+ *
+ * Uses the array 'transposed'
+ *
+ * @param {int} tab                Tight array beam index used to select output file
+ * @param {long} rowid             Row number in the SUBINT table, corresponds to ringbuffer page number + 1
+ * @param {int} rowlength          Size of a data row
+ */
+void write_fits_IQUV(int tab, long rowid, int rowlength) {
+  int status;
+  fitsfile *fptr = output[tab];
+
+  // From the cfitsio documentation:
+  // Note that it is *not* necessary to insert rows in a table before writing data to those rows (indeed, it
+  // would be inefficient to do so). Instead, one may simply write data to any row of the table, whether
+  // that row of data already exists or not.
+  //
+  // status = 0;
+  // if (fits_insert_rows(fptr, rowid, 1, &status)) {
+  //   fits_error_and_exit(status);
+  // }
+
+  double offs_sub = (double) (rowid-1) * 1.024; // OFFS_SUB is in seconds since start of run
+
+  if (col_offs_sub >= 0) {
+    status = 0;
+    if (fits_write_col(fptr, TDOUBLE, col_offs_sub, rowid, 1, 1, &offs_sub, &status)) {
+      fits_error_and_exit(status);
+    }
+  }
+
+  if (col_freqs >= 0) {
+    status = 0;
+    if (fits_write_col(fptr, TFLOAT, col_freqs, rowid, 1, NCHANNELS, freqs, &status)) {
+      fits_error_and_exit(status);
+    }
+  }
+
+  status = 0;
+  if (fits_write_col(fptr, TBYTE, col_data, rowid, 1, rowlength, transposed, &status)) {
+    fits_error_and_exit(status);
+  }
+}
+
+/**
  * Write a row of packed, 1 bit Stokes I to a FITS BINTABLE.SUBINT
  *
  * Uses the global arrays: 'scale', 'offset', and 'packed'
  *
  * @param {int} tab                Tight array beam index used to select output file
- * @param {int} rowid              Row number in the SUBINT table, corresponds to ringbuffer page number
+ * @param {int} rowid              Row number in the SUBINT table, corresponds to ringbuffer page number + 1
  */
 void write_fits_packedI(int tab, long rowid) {
   int status;
@@ -578,8 +653,12 @@ void parseOptions(int argc, char *argv[], char **key, int *padded_size, char **l
  * Suggested use is:
  *   1. realtime: ringbuffer -> [trigger] -> dada_dbdisk
  *   2. offline: dada_dbdisk -> ringbuffer -> dadafits
+ *
+ *  @param {const unsigned char *} page    Ringbuffer page with interleaved data
+ *  @param {int} ntabs                     Number of tabs
+ *  @param {int} sequence_length           Number of packets per
  */
-void deinterleave (const unsigned char *page, int science_case, int science_mode) {
+void deinterleave (const unsigned char *page, int ntabs, int sequence_length) {
   // ring buffer page contains matrix:
   //   [tab][channel_offset][sequence_number][8000]
   //
@@ -595,16 +674,6 @@ void deinterleave (const unsigned char *page, int science_case, int science_mode
   //
   // Transposed buffer will contain:
   // (NBIN,NCHAN,NPOL,NSBLK) = (1,1536,4,12500) or (1,1536,4,25000); sc3 or sc4
-  int sequence_length, ntabs;
-
-  switch (science_case) {
-    case 3: sequence_length = 25; break;
-    case 4: sequence_length = 50; break;
-  }
-  switch (science_mode) {
-    case 1: ntabs = 12; break; // IQUV + TAB
-    case 3: ntabs = 1; break; // IQUV + IAB
-  }
 
   // Tranpose by linearly processing original packets from the page
   const unsigned char *packet = page;
@@ -644,6 +713,8 @@ int main (int argc, char *argv[]) {
   int science_case;
   int science_mode;
   int ntabs;
+  int nchannels;
+  int sequence_length;
 
   // parse commandline
   parseOptions(argc, argv, &key, &padded_size, &logfile, &science_case, &science_mode, &template_file, &output_directory);
@@ -661,26 +732,40 @@ int main (int argc, char *argv[]) {
 
   LOG("dadafits version: " VERSION "\n");
 
-  int nchannels;
-  int row_size = 0;
-
-  if (science_mode == 0) { // I + TAB to be compressed and downsampled
-    row_size = NCHANNELS_LOW * NTIMES_LOW / 8;
-    nchannels = NCHANNELS_LOW;
-    ntabs = 12;
-  } else if (science_mode == 1) { // IQUV + TAB to deinterleave
-    nchannels = NCHANNELS;
-    ntabs = 12;
-  } else if (science_mode == 2) { // I + IAB to be compressed and downsampled
-    row_size = NCHANNELS_LOW * NTIMES_LOW / 8;
-    nchannels = NCHANNELS_LOW;
-    ntabs = 1;
-  } else if (science_mode == 3) { // IQUV + IAB to deinterleave
-    nchannels = NCHANNELS;
-    ntabs = 1;
-  } else {
-    fprintf(stderr, "Illegal science mode %i\n", science_mode);
-    exit(EXIT_FAILURE);
+  switch (science_mode) {
+    case 0: // IQUV + TAB to deinterleave
+      nchannels = NCHANNELS_LOW;
+      ntabs = 12;
+      break;
+    case 1: // I + TAB to be compressed and downsampled
+      nchannels = NCHANNELS;
+      ntabs = 12;
+      break;
+    case 2: // I + IAB to be compressed and downsampled
+      nchannels = NCHANNELS_LOW;
+      ntabs = 1;
+      break;
+    case 3: // IQUV + IAB to deinterleave
+      nchannels = NCHANNELS;
+      ntabs = 1;
+      break;
+    default:
+      fprintf(stderr, "Illegal science mode %i\n", science_mode);
+      exit(EXIT_FAILURE);
+  }
+  switch (science_case) {
+    case 3:
+      sequence_length = 25;
+      if (padded_size < 12500)
+        fprintf(stderr, "Error: padded_size too small, should be at least 12500 for science case 3\n");
+      break;
+    case 4:
+      sequence_length = 50;
+      if (padded_size < 25000)
+        fprintf(stderr, "Error: padded_size too small, should be at least 25000 for science case 4\n");
+      break;
+    default:
+      fprintf(stderr, "Illegal science case %i\n", science_case);
   }
 
   int quit = 0;
@@ -758,11 +843,13 @@ int main (int argc, char *argv[]) {
         case 1:
         case 3:
           // transpose data from page to transposed buffer
-          deinterleave(page, science_case, science_mode);
+          deinterleave(page, ntabs, sequence_length);
 
           for (tab = 0; tab < ntabs; tab++) {
             // write data from transposed buffer
-            write_fits_IQUV(tab, page_count + 1); // pagecount starts at 0, but FITS rowid at 1
+            write_fits_IQUV(tab,
+                page_count + 1, // pagecount starts at 0, but FITS rowid at 1
+                sequence_length * 500 * 4 * NCHANNELS);
           }
           break;
 
