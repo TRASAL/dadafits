@@ -320,13 +320,13 @@ void pack_sc34() {
   // DEBUG NaNs:
   int except = fetestexcept(FE_INVALID | FE_DIVBYZERO | FE_OVERFLOW | FE_UNDERFLOW);
   if (errno || except) {
-    LOG("Error in packing data: errn=%i, fetestexcept=", errno);
+    LOG("Error in packing data: errno=%i (%s), fetestexcept=%i", errno, strerror(errno), except);
     switch (except) {
-      case FE_INVALID: printf("FE_INVALID\n"); break;
-      case FE_DIVBYZERO: printf("FE_DIVBYZERO\n"); break;
-      case FE_OVERFLOW: printf("FE_OVERFLOW\n"); break;
-      case FE_UNDERFLOW: printf("FE_UNDERFLOW\n"); break;
-      default: printf("-\n");
+      case FE_INVALID: LOG("(FE_INVALID)\n"); break;
+      case FE_DIVBYZERO: LOG("(FE_DIVBYZERO)\n"); break;
+      case FE_OVERFLOW: LOG("(FE_OVERFLOW)\n"); break;
+      case FE_UNDERFLOW: LOG("(FE_UNDERFLOW)\n"); break;
+      default: LOG("-\n");
     }
   }
 }
