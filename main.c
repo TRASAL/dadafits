@@ -133,8 +133,8 @@ int col_offs_sub = -1;
 unsigned int downsampled[NCHANNELS_LOW * NTIMES_LOW];
 unsigned char packed[NCHANNELS_LOW * NTIMES_LOW / 8];
 unsigned char transposed[NTABS_MAX * NCHANNELS * NPOLS * SC4_NTIMES]; // big enough for largest case
-float offset[NCHANNELS];
-float scale[NCHANNELS];
+float offset[NCHANNELS * NPOLS];
+float scale[NCHANNELS * NPOLS];
 float weights[NCHANNELS];
 float freqs[NCHANNELS];
 
@@ -390,32 +390,39 @@ void dadafits_fits_init (char *template_file, char *output_directory, int ntabs,
 
   // Set scaling, weights, and offsets to neutral values
   int i;
-  for (i=0; i<NCHANNELS; i++) {
+  for (i=0; i<NCHANNELS * NPOLS; i++) {
     offset[i] = 0.0;
     scale[i] = 1.0;
+  }
+
+  for (i=0; i<NCHANNELS; i++) {
     weights[i] = 1.0;
     freqs[i] = min_frequency + (i + 0.5) * bandwidth;
   }
 
   // Get required column ID's
+  LOG("Checking which colomns are present in the template\n");
+  col_offs_sub = dadafits_find_column("OFFS_SUB", output[0]);
   col_freqs = dadafits_find_column("DAT_FREQ", output[0]);
-  col_data = dadafits_find_column("DATA", output[0]);
+  col_weights = dadafits_find_column("DAT_WTS", output[0]);
   col_offset = dadafits_find_column("DAT_OFFS", output[0]);
   col_scale = dadafits_find_column("DAT_SCL", output[0]);
-  col_weights = dadafits_find_column("DAT_WTS", output[0]);
-  col_offs_sub = dadafits_find_column("OFFS_SUB", output[0]);
+  col_data = dadafits_find_column("DATA", output[0]);
 }
 
 /**
- * Write a row of 8-bits Stokes IQUV data a FITS BINTABLE.SUBINT
+ * Write a row of data to a FITS BINTABLE.SUBINT
  *
- * Uses the array 'transposed'
+ * Optionally uses the global arrays: 'weights', 'scale', 'offset', and 'packed'
  *
- * @param {int} tab                Tight array beam index used to select output file
- * @param {long} rowid             Row number in the SUBINT table, corresponds to ringbuffer page number + 1
- * @param {int} rowlength          Size of a data row
+ * @param {const int} tab                Tight array beam index used to select output file
+ * @param {const int} channels           The number of channels to use
+ * @param {const int} pols               The number of polarizations to use
+ * @param {const int} rowid              Row number in the SUBINT table, corresponds to ringbuffer page number + 1
+ * @param {const int} rowlength          Size of a data row
+ * @param {const unsigned char *} data   Row to write
  */
-void write_fits_IQUV(int tab, long rowid, int rowlength) {
+void write_fits(const int tab, const int channels, const int pols, const long rowid, const int rowlength, unsigned char *data) {
   int status;
   fitsfile *fptr = output[tab];
 
@@ -440,78 +447,34 @@ void write_fits_IQUV(int tab, long rowid, int rowlength) {
 
   if (col_freqs >= 0) {
     status = 0;
-    if (fits_write_col(fptr, TFLOAT, col_freqs, rowid, 1, NCHANNELS, freqs, &status)) {
-      fits_error_and_exit(status);
-    }
-  }
-
-  status = 0;
-  if (fits_write_col(fptr, TBYTE, col_data, rowid, 1, rowlength, transposed, &status)) {
-    fits_error_and_exit(status);
-  }
-}
-
-/**
- * Write a row of packed, 1 bit Stokes I to a FITS BINTABLE.SUBINT
- *
- * Uses the global arrays: 'scale', 'offset', and 'packed'
- *
- * @param {int} tab                Tight array beam index used to select output file
- * @param {int} rowid              Row number in the SUBINT table, corresponds to ringbuffer page number + 1
- */
-void write_fits_packedI(int tab, long rowid) {
-  int status;
-  fitsfile *fptr = output[tab];
-
-  // From the cfitsio documentation:
-  // Note that it is *not* necessary to insert rows in a table before writing data to those rows (indeed, it
-  // would be inefficient to do so). Instead, one may simply write data to any row of the table, whether
-  // that row of data already exists or not.
-  //
-  // status = 0;
-  // if (fits_insert_rows(fptr, rowid, 1, &status)) {
-  //   fits_error_and_exit(status);
-  // }
-
-  double offs_sub = (double) rowid * 1.024; // OFFS_SUB is in seconds since start of run, but may not be zero
-
-  if (col_offs_sub >= 0) {
-    status = 0;
-    if (fits_write_col(fptr, TDOUBLE, col_offs_sub, rowid, 1, 1, &offs_sub, &status)) {
-      fits_error_and_exit(status);
-    }
-  }
-
-  if (col_freqs >= 0) {
-    status = 0;
-    if (fits_write_col(fptr, TFLOAT, col_freqs, rowid, 1, NCHANNELS_LOW, freqs, &status)) {
+    if (fits_write_col(fptr, TFLOAT, col_freqs, rowid, 1, channels, freqs, &status)) {
       fits_error_and_exit(status);
     }
   }
 
   if (col_weights >= 0) {
     status = 0;
-    if (fits_write_col(fptr, TFLOAT, col_weights, rowid, 1, NCHANNELS_LOW, weights, &status)) {
+    if (fits_write_col(fptr, TFLOAT, col_weights, rowid, 1, channels, weights, &status)) {
       fits_error_and_exit(status);
     }
   }
 
   if (col_offset >= 0) {
     status = 0;
-    if (fits_write_col(fptr, TFLOAT, col_offset, rowid, 1, NCHANNELS_LOW, offset, &status)) {
+    if (fits_write_col(fptr, TFLOAT, col_offset, rowid, 1, channels * pols, offset, &status)) {
       fits_error_and_exit(status);
     }
   }
 
   if (col_scale >= 0) {
     status = 0;
-    if (fits_write_col(fptr, TFLOAT, col_scale, rowid, 1, NCHANNELS_LOW, scale, &status)) {
+    if (fits_write_col(fptr, TFLOAT, col_scale, rowid, 1, channels * pols, scale, &status)) {
       fits_error_and_exit(status);
     }
   }
 
   status = 0;
-  if (fits_write_col(fptr, TBYTE,  col_data, rowid, 1, NCHANNELS_LOW * NTIMES_LOW / 8, packed, &status)) {
+  if (fits_write_col(fptr, TBYTE,  col_data, rowid, 1, rowlength, data, &status)) {
     fits_error_and_exit(status);
   }
 }
@@ -648,6 +611,7 @@ void parseOptions(int argc, char *argv[], char **key, int *padded_size, char **l
     exit(EXIT_FAILURE);
   }
 }
+
 /**
  * Deinterleave (transpose) an IQUV ring buffer page to the ordering needed for FITS files
  * Note that this is probably a slow function, and is not meant to be run real-time
@@ -659,7 +623,7 @@ void parseOptions(int argc, char *argv[], char **key, int *padded_size, char **l
  *  @param {int} ntabs                     Number of tabs
  *  @param {int} sequence_length           Number of packets per
  */
-void deinterleave (const unsigned char *page, int ntabs, int sequence_length) {
+void deinterleave (const unsigned char *page, const int ntabs, const int sequence_length) {
   // ring buffer page contains matrix:
   //   [tab][channel_offset][sequence_number][8000]
   //
@@ -835,10 +799,16 @@ int main (int argc, char *argv[]) {
             // and set scale and offset arrays with used values
             pack_sc34();
 
-            // write data from the packed, scale, and offset arrays
-            write_fits_packedI(tab, page_count + 1); // pagecount starts at 0, but FITS rowid at 1
+            write_fits(
+              tab,
+              NCHANNELS_LOW,
+              1, // only Stokes I
+              page_count + 1, // page_count starts at 0, but FITS rowid at 1
+              NCHANNELS_LOW * NTIMES_LOW / 8,
+              packed // write data from the packed array to file, also uses scale, and offset arrays
+            );
           }
-        break;
+          break;
 
         // stokesIQUV data to write
         case 1:
@@ -847,10 +817,14 @@ int main (int argc, char *argv[]) {
           deinterleave(page, ntabs, sequence_length);
 
           for (tab = 0; tab < ntabs; tab++) {
-            // write data from transposed buffer
-            write_fits_IQUV(tab,
-                page_count + 1, // pagecount starts at 0, but FITS rowid at 1
-                sequence_length * 500 * 4 * NCHANNELS);
+            write_fits(
+              tab,
+              NCHANNELS,
+              4, // full Stokes IQUV
+              page_count + 1, // page_count starts at 0, but FITS rowid at 1
+              sequence_length * 500 * 4 * NCHANNELS,
+              transposed // write data from transposed buffer
+            );
           }
           break;
 
