@@ -394,7 +394,7 @@ void dadafits_fits_init (char *template_file, char *output_directory, int ntabs,
     offset[i] = 0.0;
     scale[i] = 1.0;
     weights[i] = 1.0;
-    freqs[i] = min_frequency + i * bandwidth;
+    freqs[i] = min_frequency + (i + 0.5) * bandwidth;
   }
 
   // Get required column ID's
