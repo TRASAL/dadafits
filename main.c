@@ -138,6 +138,79 @@ float scale[NCHANNELS * NPOLS];
 float weights[NCHANNELS];
 float freqs[NCHANNELS];
 
+// The synthesized beams table
+#define NSYNS_MAX 512
+#define NSUBBANDS_MAX 12
+int synthesize_table[NSYNS_MAX][NSUBBANDS_MAX];
+
+/**
+ * Read the synthesized beam table
+ */
+int read_synthesize_table(char *fname) {
+  int subband_index, syn_index;
+
+  // Permitted whitespace
+  char delim[4];
+  delim[0] = ' '; // space
+  delim[1] = '\t'; // tab
+  delim[2] = '\n'; // newline If not included, empty lines in the txt file result in  a single '\n' token
+  delim[3] = '\0';
+
+  FILE *table = fopen(fname, "r");
+  if (! table) {
+    fprintf(stderr, "Cannot read file: '%s'\n", fname);
+    return 1;
+  }
+
+  syn_index = 0;
+
+#define LINELENGTH 512
+  char line[LINELENGTH];
+  while (fgets(line,LINELENGTH,table)) {
+    // remove comments
+    char *hash = index(line, '#');
+    if (hash) {
+      *hash = '\0';
+    }
+
+    subband_index = 0;
+
+    char *saveptr;
+    char *key = strtok_r(line, delim, &saveptr);
+    while (key) {
+      if (subband_index == NSUBBANDS_MAX) {
+        fprintf(stderr, "Too many subbands (more than %i), increase NSUBBANDS_MAX\n", NSUBBANDS_MAX);
+        exit(EXIT_FAILURE);
+      }
+
+      synthesize_table[syn_index][subband_index] = atoi(key);
+      key = strtok_r(NULL, delim, &saveptr); // next token
+      subband_index++;
+    }
+
+    if (subband_index != 0) { // did we read anything from this line?
+      // yes, clear the rest of this row
+      while (subband_index < NSUBBANDS_MAX) synthesize_table[syn_index][subband_index++] = -1;
+
+      // go to the next row
+      syn_index++;
+      if (syn_index == NSYNS_MAX) {
+        fprintf(stderr, "Too many synthesized beams (more than %i), increase NSYNS_MAX\n", NSYNS_MAX);
+        exit(EXIT_FAILURE);
+      }
+    }
+  }
+
+  // clear the remaining rows of the table
+  while (syn_index < NSYNS_MAX) {
+    subband_index = 0;
+    while (subband_index < NSUBBANDS_MAX) {
+      synthesize_table[syn_index][subband_index++] = -1;
+    }
+    syn_index++;
+  }
+}
+
 /**
  * Close all opened fits files
  */
@@ -542,7 +615,7 @@ dada_hdu_t *init_ringbuffer(char *key) {
  * Print commandline options
  */
 void printOptions() {
-  printf("usage: dadafits -k <hexadecimal key> -l <logfile> -c <science_case> -m <science_mode> -b <padded_size> -t <template> -d <output_directory>\n");
+  printf("usage: dadafits -k <hexadecimal key> -l <logfile> -c <science_case> -m <science_mode> -b <padded_size> -t <template> -d <output_directory> -s <synthesized beam table>\n");
   printf("e.g. dadafits -k dada -l log.txt -c 3 -m 0 -b 25088 -t /full/path/template.txt -d /output/directory\n");
   return;
 }
@@ -550,11 +623,11 @@ void printOptions() {
 /**
  * Parse commandline
  */
-void parseOptions(int argc, char *argv[], char **key, int *padded_size, char **logfile, int *science_case, int *science_mode, char **template_file, char **output_directory) {
+void parseOptions(int argc, char *argv[], char **key, int *padded_size, char **logfile, int *science_case, int *science_mode, char **template_file, char **table_name, char **output_directory) {
   int c;
 
   int setk=0, setb=0, setl=0, setc=0, setm=0, sett=0, setd=0;
-  while((c=getopt(argc,argv,"k:b:l:c:m:t:d:"))!=-1) {
+  while((c=getopt(argc,argv,"k:b:l:c:m:t:d:s:"))!=-1) {
     switch(c) {
       // -t <template_file>
       case('t'):
@@ -597,6 +670,11 @@ void parseOptions(int argc, char *argv[], char **key, int *padded_size, char **l
       case('m'):
         *science_mode = atoi(optarg);
         setm = 1;
+        break;
+
+      // OPTIONAL: -s synthesized beam table
+      case('s'):
+        *table_name = strdup(optarg);
         break;
 
       default:
@@ -668,12 +746,32 @@ void deinterleave (const unsigned char *page, const int ntabs, const int sequenc
     }
   }
 }
+/**
+ * Create a synthesize beam using the synthesize_table and the current Stokes IQUV transposed buffer
+ *
+ * @param {int} sb The desired synthisized beam
+ */
+void synthesize(int sb) {
+  if (sb < 0 || sb >= NSYNS_MAX) {
+    fprintf(stderr, "Illegal synthesized beam requested.\n");
+    exit(EXIT_FAILURE);
+  }
+
+  int subband_index = 0;
+  while (subband_index < NSUBBANDS_MAX && synthesize_table[sb][subband_index] == -1) {
+
+    subband_index++;
+  }
+  // TODO: Normalize?
+
+}
 
 int main (int argc, char *argv[]) {
   char *key;
   int padded_size;
   char *logfile;
   char *template_file;
+  char *table_name = NULL; // optional argument
   char *output_directory = NULL; // defaults to CWD
   int science_case;
   int science_mode;
@@ -682,7 +780,7 @@ int main (int argc, char *argv[]) {
   int sequence_length;
 
   // parse commandline
-  parseOptions(argc, argv, &key, &padded_size, &logfile, &science_case, &science_mode, &template_file, &output_directory);
+  parseOptions(argc, argv, &key, &padded_size, &logfile, &science_case, &science_mode, &template_file, &table_name, &output_directory);
 
   // set up logging
   if (logfile) {
@@ -696,6 +794,11 @@ int main (int argc, char *argv[]) {
   }
 
   LOG("dadafits version: " VERSION "\n");
+
+  if (table_name) {
+    LOG("Reading synthesized beam table '%s'\n", table_name);
+    read_synthesize_table(table_name);
+  }
 
   switch (science_mode) {
     case 0: // IQUV + TAB to deinterleave
