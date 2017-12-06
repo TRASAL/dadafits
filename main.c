@@ -98,6 +98,8 @@
 FILE *runlog = NULL;
 #define LOG(...) {fprintf(stdout, __VA_ARGS__); fprintf(runlog, __VA_ARGS__); fflush(stdout);}
 
+char *science_modes[] = {"I+TAB", "IQUV+TAB", "I+IAB", "IQUV+IAB"};
+
 #define NTABS_MAX 12
 #define NCHANNELS 1536
 #define NPOLS 4
@@ -132,7 +134,7 @@ int col_offs_sub = -1;
 
 unsigned int downsampled[NCHANNELS_LOW * NTIMES_LOW];
 unsigned char packed[NCHANNELS_LOW * NTIMES_LOW / 8];
-unsigned char transposed[NTABS_MAX * NCHANNELS * NPOLS * SC4_NTIMES]; // big enough for largest case
+unsigned char *transposed = NULL; // Stokes IQUV buffer of approx 2 GB, allocated only when necessary
 float offset[NCHANNELS * NPOLS];
 float scale[NCHANNELS * NPOLS];
 float weights[NCHANNELS];
@@ -158,7 +160,7 @@ int read_synthesize_table(char *fname) {
 
   FILE *table = fopen(fname, "r");
   if (! table) {
-    fprintf(stderr, "Cannot read file: '%s'\n", fname);
+    LOG("Error: Cannot read file: '%s'\n", fname);
     return 1;
   }
 
@@ -179,7 +181,7 @@ int read_synthesize_table(char *fname) {
     char *key = strtok_r(line, delim, &saveptr);
     while (key) {
       if (subband_index == NSUBBANDS_MAX) {
-        fprintf(stderr, "Too many subbands (more than %i), increase NSUBBANDS_MAX\n", NSUBBANDS_MAX);
+        LOG("Error: Too many subbands (more than %i), increase NSUBBANDS_MAX\n", NSUBBANDS_MAX);
         exit(EXIT_FAILURE);
       }
 
@@ -195,7 +197,7 @@ int read_synthesize_table(char *fname) {
       // go to the next row
       syn_index++;
       if (syn_index == NSYNS_MAX) {
-        fprintf(stderr, "Too many synthesized beams (more than %i), increase NSYNS_MAX\n", NSYNS_MAX);
+        LOG("Too many synthesized beams (more than %i), increase NSYNS_MAX\n", NSYNS_MAX);
         exit(EXIT_FAILURE);
       }
     }
@@ -257,12 +259,10 @@ void fits_error_and_exit(int status) {
  * Also, we are using 8bit integers, which are much faster than SSE/AVX operations on floats.
  * See for some interesting reading https://github.com/jodavies/dot-product
  *
- * @param {int} tab                                     TAB index
- * @param {uchar[NTABS, NCHANNELS, padded_size]} buffer Ring buffer page to downsample
+ * @param {uchar[NCHANNELS, padded_size]} buffer        Buffer page to downsample
  * @param {int} padded_size                             Size of fastest dimension, as timeseries are padded for optimal memory layout on GPU
- * @param {int} science_case                            Science case; either 3 (12500 samples) or 4 (25000 samples) per batch of 1.024 seconds
  */
-void downsample_sc3(const int tab, const unsigned char *buffer, const int padded_size) {
+void downsample_sc3(const unsigned char *buffer, const int padded_size) {
   unsigned int *temp1 = downsampled;
   int dc; // downsampled channel
   int dt; // downsampled time
@@ -270,10 +270,10 @@ void downsample_sc3(const int tab, const unsigned char *buffer, const int padded
 
   for (dc=0; dc < NCHANNELS_LOW; dc++) {
     // pointer to next sample in the four channels
-    unsigned const char *s0 = &buffer[tab * NCHANNELS * padded_size + ((dc << 2) + 0) * padded_size];
-    unsigned const char *s1 = &buffer[tab * NCHANNELS * padded_size + ((dc << 2) + 1) * padded_size];
-    unsigned const char *s2 = &buffer[tab * NCHANNELS * padded_size + ((dc << 2) + 2) * padded_size];
-    unsigned const char *s3 = &buffer[tab * NCHANNELS * padded_size + ((dc << 2) + 3) * padded_size];
+    unsigned const char *s0 = &buffer[((dc << 2) + 0) * padded_size];
+    unsigned const char *s1 = &buffer[((dc << 2) + 1) * padded_size];
+    unsigned const char *s2 = &buffer[((dc << 2) + 2) * padded_size];
+    unsigned const char *s3 = &buffer[((dc << 2) + 3) * padded_size];
 
     for (dt=0; dt < NTIMES_LOW; dt++) {
       // partial sums (per channel)
@@ -293,7 +293,7 @@ void downsample_sc3(const int tab, const unsigned char *buffer, const int padded
   }
 }
 
-void downsample_sc4(const int tab, const unsigned char *buffer, const int padded_size) {
+void downsample_sc4(const unsigned char *buffer, const int padded_size) {
   unsigned int *temp1 = downsampled;
   int dc; // downsampled channel
   int dt; // downsampled time
@@ -301,10 +301,10 @@ void downsample_sc4(const int tab, const unsigned char *buffer, const int padded
 
   for (dc=0; dc < NCHANNELS_LOW; dc++) {
     // pointer to next sample in the four channels
-    unsigned const char *s0 = &buffer[tab * NCHANNELS * padded_size + ((dc << 2) + 0) * padded_size];
-    unsigned const char *s1 = &buffer[tab * NCHANNELS * padded_size + ((dc << 2) + 1) * padded_size];
-    unsigned const char *s2 = &buffer[tab * NCHANNELS * padded_size + ((dc << 2) + 2) * padded_size];
-    unsigned const char *s3 = &buffer[tab * NCHANNELS * padded_size + ((dc << 2) + 3) * padded_size];
+    unsigned const char *s0 = &buffer[((dc << 2) + 0) * padded_size];
+    unsigned const char *s1 = &buffer[((dc << 2) + 1) * padded_size];
+    unsigned const char *s2 = &buffer[((dc << 2) + 2) * padded_size];
+    unsigned const char *s3 = &buffer[((dc << 2) + 3) * padded_size];
 
     for (dt=0; dt < NTIMES_LOW; dt++) {
       // partial sums (per channel)
@@ -364,7 +364,7 @@ void pack_sc34() {
     offset[dc] = sum / (1.0 * NTIMES_LOW);
     scale[dc]  = sqrtf(sos / (1.0 * NTIMES_LOW) - offset[dc] * offset[dc]);
 
-    // Set cutoff to 1 stdev above average
+    // Set cutoff to 1 stdev above average, results (using fake/fast random data, in 15% true, 85% false)
     unsigned int cutoff = offset[dc] + scale[dc];
 
     // Second pass: convert to 1 bit
@@ -393,7 +393,7 @@ void pack_sc34() {
   // DEBUG NaNs:
   int except = fetestexcept(FE_INVALID | FE_DIVBYZERO | FE_OVERFLOW | FE_UNDERFLOW);
   if (errno || except) {
-    LOG("Error in packing data: errno=%i (%s), fetestexcept=%i", errno, strerror(errno), except);
+    LOG("Error: floating point exception in packing data: errno=%i (%s), fetestexcept=%i", errno, strerror(errno), except);
     switch (except) {
       case FE_INVALID: LOG("(FE_INVALID)\n"); break;
       case FE_DIVBYZERO: LOG("(FE_DIVBYZERO)\n"); break;
@@ -474,7 +474,7 @@ void dadafits_fits_init (char *template_file, char *output_directory, int ntabs,
   }
 
   // Get required column ID's
-  LOG("Checking which colomns are present in the template\n");
+  LOG("Checking which columns are present in the template\n");
   col_offs_sub = dadafits_find_column("OFFS_SUB", output[0]);
   col_freqs = dadafits_find_column("DAT_FREQ", output[0]);
   col_weights = dadafits_find_column("DAT_WTS", output[0]);
@@ -498,7 +498,7 @@ void dadafits_fits_init (char *template_file, char *output_directory, int ntabs,
 void write_fits(const int tab, const int channels, const int pols, const long rowid, const int rowlength, unsigned char *data) {
   int status;
   fitsfile *fptr = output[tab];
-
+LOG("Writing row: %li\n", rowid);
   // From the cfitsio documentation:
   // Note that it is *not* necessary to insert rows in a table before writing data to those rows (indeed, it
   // would be inefficient to do so). Instead, one may simply write data to any row of the table, whether
@@ -716,7 +716,7 @@ void deinterleave (const unsigned char *page, const int ntabs, const int sequenc
   //   c0, c1, c2, c3 = curr_channel + 0, 1, 2, 3
   //
   // Transposed buffer will contain:
-  // (NBIN,NCHAN,NPOL,NSBLK) = (1,1536,4,12500) or (1,1536,4,25000); sc3 or sc4
+  // (TAB,NBIN,NCHAN,NPOL,NSBLK) = (NTABS,1,1536,4,12500) or (NTABS,1,1536,4,25000); sc3 or sc4
 
   // Tranpose by linearly processing original packets from the page
   const unsigned char *packet = page;
@@ -753,7 +753,7 @@ void deinterleave (const unsigned char *page, const int ntabs, const int sequenc
  */
 void synthesize(int sb) {
   if (sb < 0 || sb >= NSYNS_MAX) {
-    fprintf(stderr, "Illegal synthesized beam requested.\n");
+    LOG("Error: Illegal synthesized beam requested.\n");
     exit(EXIT_FAILURE);
   }
 
@@ -776,7 +776,9 @@ int main (int argc, char *argv[]) {
   int science_case;
   int science_mode;
   int ntabs;
-  int nchannels;
+  int nchannels; // for FITS outputfile (so after optional compression)
+  int ntimes; // for FITS outputfile (so after optional compression)
+  int npols; // for FITS outputfile (so after optional compression)
   int sequence_length;
 
   // parse commandline
@@ -801,39 +803,66 @@ int main (int argc, char *argv[]) {
   }
 
   switch (science_mode) {
-    case 0: // IQUV + TAB to deinterleave
+    case 0: // I + TAB to be compressed and downsampled
+      ntimes = NTIMES_LOW;
       nchannels = NCHANNELS_LOW;
       ntabs = 12;
+      npols = 1;
       break;
-    case 1: // I + TAB to be compressed and downsampled
+    case 1: // IQUV + TAB to deinterleave
+      ntimes = 25000;
       nchannels = NCHANNELS;
       ntabs = 12;
+      npols = 4;
       break;
     case 2: // I + IAB to be compressed and downsampled
+      ntimes = NTIMES_LOW;
       nchannels = NCHANNELS_LOW;
       ntabs = 1;
+      npols = 1;
       break;
     case 3: // IQUV + IAB to deinterleave
+      ntimes = 25000;
       nchannels = NCHANNELS;
       ntabs = 1;
+      npols = 4;
       break;
     default:
-      fprintf(stderr, "Illegal science mode %i\n", science_mode);
+      LOG("Illegal science mode %i\n", science_mode);
       exit(EXIT_FAILURE);
   }
+
   switch (science_case) {
     case 3:
       sequence_length = 25;
-      if (padded_size < 12500)
-        fprintf(stderr, "Error: padded_size too small, should be at least 12500 for science case 3\n");
+      if (padded_size < 12500) {
+        LOG("Error: padded_size too small, should be at least 12500 for science case 3\n");
+        exit(EXIT_FAILURE);
+      }
       break;
     case 4:
       sequence_length = 50;
-      if (padded_size < 25000)
-        fprintf(stderr, "Error: padded_size too small, should be at least 25000 for science case 4\n");
+      if (padded_size < 25000) {
+        LOG("Error: padded_size too small, should be at least 25000 for science case 4\n");
+        exit(EXIT_FAILURE);
+      }
       break;
     default:
-      fprintf(stderr, "Illegal science case %i\n", science_case);
+      LOG("Illegal science case %i\n", science_case);
+      exit(EXIT_FAILURE);
+  }
+
+  LOG("Science mode: %i [ %s ]\n", science_mode, science_modes[science_mode]);
+  LOG("Science case: %i\n", science_case);
+  LOG("Output to FITS tabs: %i, channels: %i, polarizations: %i, samples: %i\n", ntabs, nchannels, npols, ntimes);
+
+  if (science_mode == 1 || science_mode == 3) {
+    LOG("Allocating Stokes IQUV transpose buffer (%i,%i,%i,%i)\n", ntabs, NCHANNELS, NPOLS, ntimes);
+    transposed = malloc(ntabs * NCHANNELS * NPOLS * ntimes * sizeof(char));
+    if (transposed == NULL) {
+      LOG("Could not allocate stokes IQUV transpose matrix\n");
+      exit(EXIT_FAILURE);
+    }
   }
 
   int quit = 0;
@@ -844,7 +873,8 @@ int main (int argc, char *argv[]) {
 
 #ifdef DRY_RUN
   // do 10 iterations with random data, ignore ringbuffer
-  int mysize = NTABS_MAX * NCHANNELS * padded_size * 4; // IQUV
+  int mysize = ntabs * NCHANNELS * npols * padded_size;
+  LOG("DRY RUN FAKE DATA: ntabs=%i, nchannels=%i, npols=%i, padded_size=%i, mysize=%i\n", ntabs, NCHANNELS, npols, padded_size, mysize);
   char *page = malloc(mysize);
 
   dadafits_fits_init(template_file, output_directory, ntabs,
@@ -892,9 +922,9 @@ int main (int argc, char *argv[]) {
           for (tab = 0; tab < ntabs; tab++) {
             // move data from the page to the downsampled array
             if (science_case == 3) {
-              downsample_sc3(tab, page, padded_size);
+              downsample_sc3(&page[tab * NCHANNELS * padded_size], padded_size);
             } else if (science_case == 4) {
-              downsample_sc4(tab, page, padded_size);
+              downsample_sc4(&page[tab * NCHANNELS * padded_size], padded_size);
             } else {
               exit(EXIT_FAILURE);
             }
@@ -902,13 +932,16 @@ int main (int argc, char *argv[]) {
             // and set scale and offset arrays with used values
             pack_sc34();
 
+            // NOTE: Use hardcoded values instead of the variables ntimes, nchannels, npols
+            // because at this point in the program they can only have these values, and this could
+            // possibly allow some more optimizations
             write_fits(
               tab,
               NCHANNELS_LOW,
               1, // only Stokes I
               page_count + 1, // page_count starts at 0, but FITS rowid at 1
               NCHANNELS_LOW * NTIMES_LOW / 8,
-              packed // write data from the packed array to file, also uses scale, and offset arrays
+              packed // write data from the packed array to file, also uses scale, weights, and offset arrays
             );
           }
           break;
@@ -920,20 +953,21 @@ int main (int argc, char *argv[]) {
           deinterleave(page, ntabs, sequence_length);
 
           for (tab = 0; tab < ntabs; tab++) {
+            // write data from transposed buffer, also uses scale, weights, and offset arrays (but set to neutral values)
             write_fits(
               tab,
               NCHANNELS,
               4, // full Stokes IQUV
               page_count + 1, // page_count starts at 0, but FITS rowid at 1
-              sequence_length * 500 * 4 * NCHANNELS,
-              transposed // write data from transposed buffer
+              sequence_length * 500 * NPOLS * NCHANNELS,
+              &transposed[tab * NCHANNELS * NPOLS * sequence_length * 500]
             );
           }
           break;
 
         default:
           // should not happen
-          fprintf(stderr, "Illegal science mode %i\n", science_mode);
+          LOG("Illegal science mode %i\n", science_mode);
           quit = 1;
           break;
       }
