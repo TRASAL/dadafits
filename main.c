@@ -810,7 +810,7 @@ int main (int argc, char *argv[]) {
       npols = 1;
       break;
     case 1: // IQUV + TAB to deinterleave
-      ntimes = 25000;
+      ntimes = science_case == 3 ? 12500 : 25000;
       nchannels = NCHANNELS;
       ntabs = 12;
       npols = 4;
@@ -822,7 +822,7 @@ int main (int argc, char *argv[]) {
       npols = 1;
       break;
     case 3: // IQUV + IAB to deinterleave
-      ntimes = 25000;
+      ntimes = science_case == 3 ? 12500 : 25000;
       nchannels = NCHANNELS;
       ntabs = 1;
       npols = 4;
