@@ -784,7 +784,7 @@ void parseOptions(int argc, char *argv[], char **key, int *padded_size, char **l
         *table_name = strdup(optarg);
         break;
 
-      // OPTIONAL: -S synthesized beam table
+      // OPTIONAL: -s synthesized beam selection
       case('s'):
         *sb_selection = strdup(optarg);
         break;
