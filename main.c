@@ -452,13 +452,17 @@ void pack_sc34() {
       sos += (*temp1) * (*temp1);
       sum += *temp1++;
     }
-    offset[dc] = sum / (1.0 * NTIMES_LOW);
-    scale[dc]  = sqrtf(sos / (1.0 * NTIMES_LOW) - offset[dc] * offset[dc]);
-
-    // Set cutoff to 1 stdev above average, results (using fake/fast random data, in 15% true, 85% false)
-    unsigned int cutoff = offset[dc] + scale[dc];
+    float avg = sum / (1.0 * NTIMES_LOW);
+    float std = sqrtf(sos / (1.0 * NTIMES_LOW) - avg * avg);
 
     // Second pass: convert to 1 bit
+    // 0: below average, represented by nummerical value avg-std
+    // 1: above average, represented by nummerical value avg+std
+    offset[dc] = avg - std;
+    scale[dc]  = 2.0 * std;
+
+    unsigned int cutoff = avg;
+
     temp1 = &downsampled[dc * NTIMES_LOW];
     for (dt=0; dt < NTIMES_LOW; dt++) {
       *temp1++ = *temp1 > cutoff ? 1 : 0;
