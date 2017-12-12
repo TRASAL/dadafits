@@ -120,21 +120,10 @@ char *science_modes[] = {"I+TAB", "IQUV+TAB", "I+IAB", "IQUV+IAB"};
 float min_frequency = 1492;
 float channel_bandwidth = 0.1953125;
 
-// Variables used for FITS output
-fitsfile *output[NTABS_MAX];
-
-// Fit column ID's, looked up from the template.
-// If not present in the template, it is set to '-1' and not written
-int col_data = -1;
-int col_freqs = -1;
-int col_offset = -1;
-int col_scale = -1;
-int col_weights = -1;
-int col_offs_sub = -1;
-
 unsigned int downsampled[NCHANNELS_LOW * NTIMES_LOW];
 unsigned char packed[NCHANNELS_LOW * NTIMES_LOW / 8];
 unsigned char *transposed = NULL; // Stokes IQUV buffer of approx 2 GB, allocated only when necessary
+unsigned char *synthesized = NULL; // Stokes IQUV for a single synthesized beam
 float offset[NCHANNELS * NPOLS];
 float scale[NCHANNELS * NPOLS];
 float weights[NCHANNELS];
@@ -142,10 +131,25 @@ float freqs[NCHANNELS];
 
 // The synthesized beams table
 #define NSYNS_MAX 256
-#define NSUBBANDS_MAX 32
-int synthesized_beam_table[NSYNS_MAX][NSUBBANDS_MAX];
+#define NSUBBANDS 32
+#define SUBBAND_UNSET 9999
+#define FREQS_PER_SUBBAND 48
+int synthesize_beams = 0;
+int synthesized_beam_table[NSYNS_MAX][NSUBBANDS];
 int synthesized_beam_selected[NSYNS_MAX];
 int synthesized_beam_count; // number of SBs in the table
+
+// Variables used for FITS output, indexed by TAB or synthesized beam number
+fitsfile *output[NSYNS_MAX];
+
+// Fit column ID's, looked up from the template.
+// If not present in the template, it set it to '-1' and it is not written
+int col_data = 17;
+int col_freqs = 13;
+int col_offset = 15;
+int col_scale = 16;
+int col_weights = 14;
+int col_offs_sub = 2;
 
 /**
  * Parse commandline for synthesized beams
@@ -262,8 +266,8 @@ int read_synthesized_beam_table(char *fname) {
     char *saveptr;
     char *key = strtok_r(line, delim, &saveptr);
     while (key) {
-      if (subband_index == NSUBBANDS_MAX) {
-        LOG("Error: Too many subbands (more than %i), increase NSUBBANDS_MAX\n", NSUBBANDS_MAX);
+      if (subband_index == NSUBBANDS) {
+        LOG("Error: Too many subbands (more than %i), increase NSUBBANDS\n", NSUBBANDS);
         exit(EXIT_FAILURE);
       }
 
@@ -273,8 +277,10 @@ int read_synthesized_beam_table(char *fname) {
     }
 
     if (subband_index != 0) { // did we read anything from this line?
-      // yes, clear the rest of this row
-      while (subband_index < NSUBBANDS_MAX) synthesized_beam_table[syn_index][subband_index++] = -1;
+      if (subband_index != NSUBBANDS) {
+        LOG("Error: wrong number of subbands (%i) for beam %i\n", subband_index, syn_index);
+        exit(EXIT_FAILURE);
+      }
 
       // go to the next row
       syn_index++;
@@ -291,8 +297,8 @@ int read_synthesized_beam_table(char *fname) {
   // clear the remaining rows of the table
   while (syn_index < NSYNS_MAX) {
     subband_index = 0;
-    while (subband_index < NSUBBANDS_MAX) {
-      synthesized_beam_table[syn_index][subband_index++] = -1;
+    while (subband_index < NSUBBANDS) {
+      synthesized_beam_table[syn_index][subband_index++] = SUBBAND_UNSET;
     }
     syn_index++;
   }
@@ -516,25 +522,46 @@ int dadafits_find_column(char *name, fitsfile *file) {
  * @param {char *} template_file    FITS template to use for creating initial file.
  * @param {char *} output_directory Directoy where output FITS files can be written.
  * @param {int} ntabs               Number of beams
+ * @param {int} mode                0: one file per tab, 1: one file per selected synthesized beam
  * @param {float } bandwidth        Bandwith per channel, after optional downsampling
  */
-void dadafits_fits_init (char *template_file, char *output_directory, int ntabs, float bandwidth) {
+void dadafits_fits_init (char *template_file, char *output_directory, int ntabs, int mode, float bandwidth) {
   int status;
   float version;
   fits_get_version(&version);
   LOG("Using FITS library version %f\n", version);
 
+  // set filename prefix according to mode:
+  char *prefix;
+  char *tab_prefix = "tab";
+  char *synthesized_beam_prefix = "syn";
+  if (mode == 0) {
+    // one file per tab, name after tab
+    prefix = tab_prefix;
+  } else {
+    // one file per synthesized beam, name after synthesize beam
+    prefix = synthesized_beam_prefix;
+  }
+
   int t;
-  for (t=0; t<ntabs; t++) {
+  for (t=0; t<NSYNS_MAX; t++) {
     char fname[256];
     fitsfile *fptr;
 
-    if (output_directory) {
-      snprintf(fname, 256, "%s/beam%c.fits(%s)", output_directory, 'A'+t, template_file);
-    } else {
-      snprintf(fname, 256, "beam%c.fits(%s)", 'A'+t, template_file);
+    if (mode == 0 && t >= ntabs) {
+      // when one file per tab, stop after ntab files
+      break;
+    } else if (mode == 1 && ! synthesized_beam_selected[t]) {
+      // when one file per synthesized beam, skip when not selected
+      continue;
     }
-    LOG("Writing tab %02i to file %s\n", t, fname);
+
+    if (output_directory) {
+      snprintf(fname, 256, "%s/%s%c.fits(%s)", output_directory, prefix, 'A'+t, template_file);
+    } else {
+      snprintf(fname, 256, "%s%c.fits(%s)", prefix, 'A'+t, template_file);
+    }
+    LOG("Writing %s %02i to file %s\n", prefix, t, fname);
 
     status = 0; if (fits_create_file(&fptr, fname, &status)) fits_error_and_exit(status);
     status = 0; if (fits_movabs_hdu(fptr, 1, NULL, &status)) fits_error_and_exit(status);
@@ -557,15 +584,6 @@ void dadafits_fits_init (char *template_file, char *output_directory, int ntabs,
     weights[i] = 1.0;
     freqs[i] = min_frequency + (i + 0.5) * bandwidth;
   }
-
-  // Get required column ID's
-  LOG("Checking which columns are present in the template\n");
-  col_offs_sub = dadafits_find_column("OFFS_SUB", output[0]);
-  col_freqs = dadafits_find_column("DAT_FREQ", output[0]);
-  col_weights = dadafits_find_column("DAT_WTS", output[0]);
-  col_offset = dadafits_find_column("DAT_OFFS", output[0]);
-  col_scale = dadafits_find_column("DAT_SCL", output[0]);
-  col_data = dadafits_find_column("DATA", output[0]);
 }
 
 /**
@@ -836,25 +854,6 @@ void deinterleave (const unsigned char *page, const int ntabs, const int sequenc
     }
   }
 }
-/**
- * Create a synthesize beam using the synthesize_table and the current Stokes IQUV transposed buffer
- *
- * @param {int} sb The desired synthisized beam
- */
-void synthesize(int sb) {
-  if (sb < 0 || sb >= NSYNS_MAX) {
-    LOG("Error: Illegal synthesized beam requested.\n");
-    exit(EXIT_FAILURE);
-  }
-
-  int subband_index = 0;
-  while (subband_index < NSUBBANDS_MAX && synthesized_beam_table[sb][subband_index] == -1) {
-
-    subband_index++;
-  }
-  // TODO: Normalize?
-
-}
 
 int main (int argc, char *argv[]) {
   char *key;
@@ -889,10 +888,13 @@ int main (int argc, char *argv[]) {
   LOG("dadafits version: " VERSION "\n");
 
   if (table_name) {
+    LOG("Writing synthesized beams\n");
+    synthesize_beams = 1;
     read_synthesized_beam_table(table_name);
     parse_synthesized_beam_selection(sb_selection);
   } else {
     LOG("Writing TABs (not synthesized beams)\n");
+    synthesize_beams = 0;
   }
 
   switch (science_mode) {
@@ -901,6 +903,10 @@ int main (int argc, char *argv[]) {
       nchannels = NCHANNELS_LOW;
       ntabs = 12;
       npols = 1;
+      if (synthesize_beams) {
+        LOG("Cannot write synthesized beams for compressed I+TAB\n");
+        exit(EXIT_FAILURE);
+      }
       break;
     case 1: // IQUV + TAB to deinterleave
       ntimes = science_case == 3 ? 12500 : 25000;
@@ -913,6 +919,10 @@ int main (int argc, char *argv[]) {
       nchannels = NCHANNELS_LOW;
       ntabs = 1;
       npols = 1;
+      if (synthesize_beams) {
+        LOG("Cannot write synthesized beams for compressed I+IAB\n");
+        exit(EXIT_FAILURE);
+      }
       break;
     case 3: // IQUV + IAB to deinterleave
       ntimes = science_case == 3 ? 12500 : 25000;
@@ -958,6 +968,15 @@ int main (int argc, char *argv[]) {
     }
   }
 
+  if (synthesize_beams) {
+    LOG("Allocating Stokes IQUV synthesized beam buffer (1,%i,%i,%i)\n", NCHANNELS, NPOLS, ntimes);
+    synthesized = malloc(1 * NCHANNELS * NPOLS * ntimes * sizeof(char));
+    if (synthesized == NULL) {
+      LOG("Could not allocate stokes IQUV synthesized beam buffer\n");
+      exit(EXIT_FAILURE);
+    }
+  }
+
   int quit = 0;
   long page_count = 0;
 
@@ -970,8 +989,7 @@ int main (int argc, char *argv[]) {
   LOG("DRY RUN FAKE DATA: ntabs=%i, nchannels=%i, npols=%i, padded_size=%i, mysize=%i\n", ntabs, NCHANNELS, npols, padded_size, mysize);
   char *page = malloc(mysize);
 
-  dadafits_fits_init(template_file, output_directory, ntabs,
-      channel_bandwidth * NCHANNELS / nchannels);
+  dadafits_fits_init(template_file, output_directory, ntabs, synthesize_beams, channel_bandwidth * NCHANNELS / nchannels);
 
   int g_seed = 1234;
   inline unsigned char fastrand() {
@@ -996,14 +1014,14 @@ int main (int argc, char *argv[]) {
   ipcio_t *ipc = ringbuffer->data_block;
   uint64_t bufsz = ipc->curbufsz;
 
-  dadafits_fits_init(template_file, output_directory, ntabs,
-      channel_bandwidth * NCHANNELS / nchannels);
+  dadafits_fits_init(template_file, output_directory, ntabs, synthesize_beams, channel_bandwidth * NCHANNELS / nchannels);
 
   while(!quit && !ipcbuf_eod(data_block)) {
     page = ipcbuf_get_next_read(data_block, &bufsz);
 #endif
 
     int tab; // tight array beam
+    int sb;  // synthesized beam
 
     if (! page) {
       quit = 1;
@@ -1039,22 +1057,63 @@ int main (int argc, char *argv[]) {
           }
           break;
 
-        // stokesIQUV data to write
+        // stokesIQUV data to (optionally synthesize) and write
         case 1:
         case 3:
           // transpose data from page to transposed buffer
           deinterleave(page, ntabs, sequence_length);
 
-          for (tab = 0; tab < ntabs; tab++) {
-            // write data from transposed buffer, also uses scale, weights, and offset arrays (but set to neutral values)
-            write_fits(
-              tab,
-              NCHANNELS,
-              4, // full Stokes IQUV
-              page_count + 1, // page_count starts at 0, but FITS rowid at 1
-              sequence_length * 500 * NPOLS * NCHANNELS,
-              &transposed[tab * NCHANNELS * NPOLS * sequence_length * 500]
-            );
+          if (synthesize_beams) {
+            // synthesize beams
+            //
+            // Input: transposed buffer   [TABS, CHANNELS, POLS, TIMES]
+            // Output: synthesized buffer [CHANNELS, POLS, TIMES]
+            
+            for (sb = 0; sb < synthesized_beam_count; sb++) {
+              if (synthesized_beam_selected[sb]) {
+                int band;
+
+                // a subband contains 1536/32=48 frequencies from a TAB
+                for (band = 0; band < NSUBBANDS; band++) {
+                  // find the TAB for this subband, and check validity
+                  tab = synthesized_beam_table[sb][band]; // TODO: subband from table -> tab?
+                  if (tab == SUBBAND_UNSET || tab > ntabs) {
+                    LOG("Error: illegal subband index %i in synthesized beam %i\n", tab, sb);
+                    exit(EXIT_FAILURE);
+                  }
+
+                  memcpy(
+                    &synthesized[band * FREQS_PER_SUBBAND * NPOLS * ntimes],
+                    &transposed[(tab * NCHANNELS + band * FREQS_PER_SUBBAND) * NPOLS * ntimes],
+                    FREQS_PER_SUBBAND * NPOLS * ntimes
+                  );
+                }
+
+                // write data from synthesized buffer
+                write_fits(
+                  sb,
+                  NCHANNELS,
+                  NPOLS, // full Stokes IQUV
+                  page_count + 1, // page_count starts at 0, but FITS rowid at 1
+                  NCHANNELS * NPOLS * ntimes,
+                  synthesized
+                );
+              }
+            }
+          } else {
+            LOG("TABs %i\n", ntabs);
+            // do not synthesize, but use TABs
+            for (tab = 0; tab < ntabs; tab++) {
+              // write data from transposed buffer, also uses scale, weights, and offset arrays (but set to neutral values)
+              write_fits(
+                tab,
+                NCHANNELS,
+                NPOLS, // full Stokes IQUV
+                page_count + 1, // page_count starts at 0, but FITS rowid at 1
+                NCHANNELS * NPOLS * ntimes,
+                &transposed[tab * NCHANNELS * NPOLS * ntimes]
+              );
+            }
           }
           break;
 
