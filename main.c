@@ -141,15 +141,97 @@ float weights[NCHANNELS];
 float freqs[NCHANNELS];
 
 // The synthesized beams table
-#define NSYNS_MAX 512
-#define NSUBBANDS_MAX 12
-int synthesize_table[NSYNS_MAX][NSUBBANDS_MAX];
+#define NSYNS_MAX 256
+#define NSUBBANDS_MAX 32
+int synthesized_beam_table[NSYNS_MAX][NSUBBANDS_MAX];
+int synthesized_beam_selected[NSYNS_MAX];
+int synthesized_beam_count; // number of SBs in the table
+
+/**
+ * Parse commandline for synthesized beams
+ * 
+ * Read a table via the -S option
+ * Setup up a selection of synthesized beams to process using -s
+ *     
+ *  Selections are a comma separated list of
+ *   a) single beam numbers
+ *   b) beam ranges as start,end where both limits are inclusive
+ *                     
+ *  NOTE:
+ *   * Repeating a beam has no effect
+ *   * Beams start counting at 0
+ *                                      
+ *  So something like this: -s 0,3-4,6-7,3
+ *  would result in beams 0, 3, 4, 6, and 7 to be processed
+ *                                                   
+ * Program terminates on unparseable/illegal beam selections
+ */
+void parse_synthesized_beam_selection (char *selection) {
+  int sb;
+
+  for (sb=0; sb<synthesized_beam_count; sb++) {
+    if (! selection) {
+      // without selection, process all
+      synthesized_beam_selected[sb] = 1;
+    } else {
+      // by default, do not process
+      synthesized_beam_selected[sb] = 0;
+    }
+  }
+
+  if (! selection) {
+    LOG("Processing all synthesized beams\n");
+    return;
+  }
+
+  LOG("Sythesized beam list: ");
+
+  // split string on commas
+  char delim[2];
+  delim[0]=',';
+  delim[1]='\0';
+  char *saveptr;
+
+  char *key = strtok_r(selection, delim, &saveptr);
+  while (key) {
+    char *key_start = key;
+    char *key_end = index(key, '-');
+  
+    int s = atoi(key_start);
+    int e = 0;
+    if (key_end) {
+        e = atoi(&key_end[1]); // skip leading dash, worst case: key='3-' the string key_end is now empty ('\0')
+    }
+
+    if (key_start && key_end) {
+      if (s>=synthesized_beam_count || e>=synthesized_beam_count || e < s || s<0 || e<0) {
+        LOG("Error: Invalid range: '%s'\n", key);
+        exit(EXIT_FAILURE);
+      }
+      for (sb = s; sb <= e; sb++) {
+        synthesized_beam_selected[sb] = 1;
+        LOG(" %i", sb);
+      }
+    } else {
+      if (s<0 || s >=synthesized_beam_count) {
+        LOG("Error: Invalid beam: '%s'\n", key);
+        exit(EXIT_FAILURE);
+      }
+      synthesized_beam_selected[s] = 1;
+      LOG(" %i", s);
+    }
+    key = strtok_r(NULL, delim, &saveptr); // next token
+  }
+  LOG("\n");
+}
 
 /**
  * Read the synthesized beam table
  */
-int read_synthesize_table(char *fname) {
+int read_synthesized_beam_table(char *fname) {
   int subband_index, syn_index;
+
+  LOG("Reading synthesized beam table '%s'\n", fname);
 
   // Permitted whitespace
   char delim[4];
@@ -185,14 +267,14 @@ int read_synthesize_table(char *fname) {
         exit(EXIT_FAILURE);
       }
 
-      synthesize_table[syn_index][subband_index] = atoi(key);
+      synthesized_beam_table[syn_index][subband_index] = atoi(key);
       key = strtok_r(NULL, delim, &saveptr); // next token
       subband_index++;
     }
 
     if (subband_index != 0) { // did we read anything from this line?
       // yes, clear the rest of this row
-      while (subband_index < NSUBBANDS_MAX) synthesize_table[syn_index][subband_index++] = -1;
+      while (subband_index < NSUBBANDS_MAX) synthesized_beam_table[syn_index][subband_index++] = -1;
 
       // go to the next row
       syn_index++;
@@ -203,11 +285,14 @@ int read_synthesize_table(char *fname) {
     }
   }
 
+  synthesized_beam_count = syn_index;
+  LOG("Read %i synthesized beams\n", synthesized_beam_count);
+
   // clear the remaining rows of the table
   while (syn_index < NSYNS_MAX) {
     subband_index = 0;
     while (subband_index < NSUBBANDS_MAX) {
-      synthesize_table[syn_index][subband_index++] = -1;
+      synthesized_beam_table[syn_index][subband_index++] = -1;
     }
     syn_index++;
   }
@@ -498,7 +583,7 @@ void dadafits_fits_init (char *template_file, char *output_directory, int ntabs,
 void write_fits(const int tab, const int channels, const int pols, const long rowid, const int rowlength, unsigned char *data) {
   int status;
   fitsfile *fptr = output[tab];
-LOG("Writing row: %li\n", rowid);
+
   // From the cfitsio documentation:
   // Note that it is *not* necessary to insert rows in a table before writing data to those rows (indeed, it
   // would be inefficient to do so). Instead, one may simply write data to any row of the table, whether
@@ -615,19 +700,19 @@ dada_hdu_t *init_ringbuffer(char *key) {
  * Print commandline options
  */
 void printOptions() {
-  printf("usage: dadafits -k <hexadecimal key> -l <logfile> -c <science_case> -m <science_mode> -b <padded_size> -t <template> -d <output_directory> -s <synthesized beam table>\n");
-  printf("e.g. dadafits -k dada -l log.txt -c 3 -m 0 -b 25088 -t /full/path/template.txt -d /output/directory\n");
+  printf("usage: dadafits -k <hexadecimal key> -l <logfile> -c <science_case> -m <science_mode> -b <padded_size> -t <template> -d <output_directory> -S <synthesized beam table> -s <synthesize these beams>\n");
+  printf("e.g. dadafits -k dada -l log.txt -c 3 -m 0 -b 25088 -t /full/path/template.txt -S table.txt -s 0,1,4-8 -d /output/directory\n");
   return;
 }
 
 /**
  * Parse commandline
  */
-void parseOptions(int argc, char *argv[], char **key, int *padded_size, char **logfile, int *science_case, int *science_mode, char **template_file, char **table_name, char **output_directory) {
+void parseOptions(int argc, char *argv[], char **key, int *padded_size, char **logfile, int *science_case, int *science_mode, char **template_file, char **table_name, char **sb_selection, char **output_directory) {
   int c;
 
   int setk=0, setb=0, setl=0, setc=0, setm=0, sett=0, setd=0;
-  while((c=getopt(argc,argv,"k:b:l:c:m:t:d:s:"))!=-1) {
+  while((c=getopt(argc,argv,"k:b:l:c:m:t:d:s:S:"))!=-1) {
     switch(c) {
       // -t <template_file>
       case('t'):
@@ -672,9 +757,14 @@ void parseOptions(int argc, char *argv[], char **key, int *padded_size, char **l
         setm = 1;
         break;
 
-      // OPTIONAL: -s synthesized beam table
-      case('s'):
+      // OPTIONAL: -S synthesized beam table
+      case('S'):
         *table_name = strdup(optarg);
+        break;
+
+      // OPTIONAL: -S synthesized beam table
+      case('s'):
+        *sb_selection = strdup(optarg);
         break;
 
       default:
@@ -758,7 +848,7 @@ void synthesize(int sb) {
   }
 
   int subband_index = 0;
-  while (subband_index < NSUBBANDS_MAX && synthesize_table[sb][subband_index] == -1) {
+  while (subband_index < NSUBBANDS_MAX && synthesized_beam_table[sb][subband_index] == -1) {
 
     subband_index++;
   }
@@ -772,6 +862,7 @@ int main (int argc, char *argv[]) {
   char *logfile;
   char *template_file;
   char *table_name = NULL; // optional argument
+  char *sb_selection = NULL; // optional argument, defaults to all beams
   char *output_directory = NULL; // defaults to CWD
   int science_case;
   int science_mode;
@@ -782,7 +873,7 @@ int main (int argc, char *argv[]) {
   int sequence_length;
 
   // parse commandline
-  parseOptions(argc, argv, &key, &padded_size, &logfile, &science_case, &science_mode, &template_file, &table_name, &output_directory);
+  parseOptions(argc, argv, &key, &padded_size, &logfile, &science_case, &science_mode, &template_file, &table_name, &sb_selection, &output_directory);
 
   // set up logging
   if (logfile) {
@@ -798,8 +889,10 @@ int main (int argc, char *argv[]) {
   LOG("dadafits version: " VERSION "\n");
 
   if (table_name) {
-    LOG("Reading synthesized beam table '%s'\n", table_name);
-    read_synthesize_table(table_name);
+    read_synthesized_beam_table(table_name);
+    parse_synthesized_beam_selection(sb_selection);
+  } else {
+    LOG("Writing TABs (not synthesized beams)\n");
   }
 
   switch (science_mode) {
