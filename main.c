@@ -595,7 +595,7 @@ void dadafits_fits_init (char *template_file, char *output_directory, int ntabs,
  *
  * Optionally uses the global arrays: 'weights', 'scale', 'offset', and 'packed'
  *
- * @param {const int} tab                Tight array beam index used to select output file
+ * @param {const int} tab                Tied array beam index used to select output file
  * @param {const int} channels           The number of channels to use
  * @param {const int} pols               The number of polarizations to use
  * @param {const int} rowid              Row number in the SUBINT table, corresponds to ringbuffer page number + 1
@@ -1024,7 +1024,7 @@ int main (int argc, char *argv[]) {
     page = ipcbuf_get_next_read(data_block, &bufsz);
 #endif
 
-    int tab; // tight array beam
+    int tab; // Tied array beam
     int sb;  // synthesized beam
 
     if (! page) {
