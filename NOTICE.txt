@@ -1,0 +1,4 @@
+dadafits
+Copyright 2017-2018 Netherlands eScience Center, ASTRON
+
+This product includes software developed at The Netherlands eScience Center (https://esciencecenter.nl) for the AA-ALERT project
