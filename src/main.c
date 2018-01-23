@@ -67,7 +67,7 @@
  *          t = tn + sequence_number * 50
  *          c = cn + channel_offset * 4
  *
- * Science case 4, mode 0:
+ * Science case 4, mode 2:
  *          template: sc34_1bit_I_reduced.txt
  *
  *          A ringbuffer page is interpreted as an array of Stokes I:
@@ -155,7 +155,7 @@ dada_hdu_t *init_ringbuffer(char *key) {
   unsigned int uintValue;
   float floatValue[2];
   ascii_header_get(header, "MIN_FREQUENCY", "%f", &min_frequency);
-  ascii_header_get(header, "CHANNEL_BANDWIDTH", "%f", &channel_bandwidth);
+  ascii_header_get(header, "BW", "%f", &channel_bandwidth);
 
   // tell the ringbuffer the header has been read
   if (ipcbuf_mark_cleared(hdu->header_block) < 0) {
