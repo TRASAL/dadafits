@@ -8,20 +8,17 @@ See [dadatrigger](https://github.com/AA-ALERT/dadatrigger) for an introduction a
 # Usage
 
 ```bash
- $ dadafits -k <hexadecimal key> -l <logfile> -c <science_case> -m <science_mode> -b <padded_size> -t <template> -d <output_directory> -S <synthesized beam table> -s <synthesize these beams>
+ $ dadafits -k <hexadecimal key> -l <logfile> -t <template_directory> -d <output_directory> -S <synthesized beam table> -s <synthesize these beams>
 ```
 
 Command line arguments:
  * *-k* Set the (hexadecimal) key to connect to the ringbuffer.
  * *-l* Absolute path to a logfile (to be overwritten)
  * *-n* Prefix for the fitlerbank output files
- * *-c* move to ringbuffer header
- * *-m* move to ringbuffer header
- * *-b* move to ringbuffer header
- * *-t* determined by case/mode?
- * *-d*
- * *-S* 
- * *-s*
+ * *-t* Template directory (defaults to the directory **templates** in the current working directory)
+ * *-d* Output directory
+ * *-S* Synthesized beam table
+ * *-s* Selection of synthesized beams
 
 # Modes of operation
 
@@ -56,7 +53,7 @@ The program implements different modes:
 - mode 1: Stokes IQUV + IAB
 - mode 3: Stokes IQUV + TAB
 
-## Science cases
+### Science cases
 
 The data input rate is set per science case.
 Supported cases:
@@ -76,15 +73,34 @@ For values that should be present see the table below.
 | MIN\_FREQUENCY | lowest frequency                           |                              | |
 | BW             | Bandwidth of a frequency channel           |                              | |
 | PADDED\_SIZE   | Length of the fastest dimension of the data array |                       | |
-| SCIENCE\_CASE  | Mode of operation of ARTS, determines data rate   |  TODO                 | |
-| SCIENCE\_MODE  | Mode of operation of ARTS, determines data layout |     TODO              | |
+| SCIENCE\_CASE  | Mode of operation of ARTS, determines data rate   |                       | |
+| SCIENCE\_MODE  | Mode of operation of ARTS, determines data layout |                       | |
 
 ## Data block
 
-A ringbuffer page is interpreted as an array of Stokes I: [NTABS, NCHANNELS, padded\_size]
+For modes 0 and 2 (ie Stokes I data), a ringbuffer page is interpreted as an array of Stokes I: [NTABS, NCHANNELS, padded\_size]
 Array padding along the fastest dimension is implemented to facilitate memory copies.
 
+For modes 1 and 3 (ie Stokes IQUV), a ringbuffer page is an interleaved array: [tab, channel\_offset, sequence\_number, packet]
+Where:
+- tab ranges from 0 to 0 or 11 (modes IAB or TAB)
+- channel\_offset ranges from 0 upto 383 (NCHANNELS/4 - 1)
+- sequence\_number ranges from 0 upto 24
+- packet is a direct copy of a UDP datapacket coming from the network, making up 8000 bytes
+
+The packet itself is an array: [time, channel, polarization]
+where:
+- time runs from 0 to 499, to get actual time, *sequence\_number * 500* should be added
+- channel runs from 0 to 4, to get actual channel, *channel\_offset * 4* should be added
+- polarization stands for the 4 Stokes components, IQUV.
+
 # FITS output files
+
+Output files are created in the directory specified on the commandline.
+A template is used for the FITS file and is selected based on science case and mode.
+Templates are searched for in the **template** directory in the current working directory; or its location can be specified as a command line argument.
+
+Data is stored one beam per file.
 
 # Building
 

@@ -29,6 +29,10 @@ extern FILE *runlog;
 #define FREQS_PER_SUBBAND 48
 
 // Global parameter definintions
+extern int science_case;
+extern int science_mode;
+extern int padded_size;
+
 extern unsigned int downsampled[NCHANNELS_LOW * NTIMES_LOW];
 extern unsigned char packed[NCHANNELS_LOW * NTIMES_LOW / 8];
 extern unsigned char *transposed;
@@ -53,7 +57,7 @@ extern int read_synthesized_beam_table(char *fname);
 extern void parse_synthesized_beam_selection (char *selection);
 
 // from fits_io.c
-extern void dadafits_fits_init (char *template_file, char *output_directory, int ntabs, int mode, float min_frequency, float bandwidth);
+extern void dadafits_fits_init (const char *template_dir, const char *template_file, char *output_directory, int ntabs, int mode, float min_frequency, float bandwidth);
 extern void write_fits(const int tab, const int channels, const int pols, const long rowid, const int rowlength, unsigned char *data);
 extern void close_fits();
 extern void fits_error_and_exit(int status); // needed for trapping C-c

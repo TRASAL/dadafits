@@ -145,6 +145,7 @@ void write_fits(const int tab, const int channels, const int pols, const long ro
 
 /**
  * Initialize the CFITSIO library
+ * @param {char *} template_dir     Directory containing FITS templates
  * @param {char *} template_file    FITS template to use for creating initial file.
  * @param {char *} output_directory Directoy where output FITS files can be written.
  * @param {int} ntabs               Number of beams
@@ -152,7 +153,8 @@ void write_fits(const int tab, const int channels, const int pols, const long ro
  * @param {float } min_frequency    Lowest frequency
  * @param {float } bandwidth        Bandwith per channel, after optional downsampling
  */
-void dadafits_fits_init (char *template_file, char *output_directory, int ntabs, int mode, float min_frequency, float bandwidth) {
+void dadafits_fits_init (const char *template_dir, const char *template_file, char *output_directory,
+    int ntabs, int mode, float min_frequency, float bandwidth) {
   int status;
   float version;
   fits_get_version(&version);
@@ -184,9 +186,9 @@ void dadafits_fits_init (char *template_file, char *output_directory, int ntabs,
     }
 
     if (output_directory) {
-      snprintf(fname, 256, "%s/%s%c.fits(%s)", output_directory, prefix, 'A'+t, template_file);
+      snprintf(fname, 256, "%s/%s%c.fits(%s/%s)", output_directory, prefix, 'A'+t, template_dir, template_file);
     } else {
-      snprintf(fname, 256, "%s%c.fits(%s)", prefix, 'A'+t, template_file);
+      snprintf(fname, 256, "%s%c.fits(%s/%s)", prefix, 'A'+t, template_dir, template_file);
     }
     LOG("Writing %s %02i to file %s\n", prefix, t, fname);
 
