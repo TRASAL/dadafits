@@ -150,7 +150,7 @@ void write_fits(const int tab, const int channels, const int pols, const long ro
  * @param {char *} output_directory Directoy where output FITS files can be written.
  * @param {int} ntabs               Number of beams
  * @param {int} mode                0: one file per tab, 1: one file per selected synthesized beam
- * @param {float } min_frequency    Lowest frequency
+ * @param {float } min_frequency    Center of lowest frequency band of observation
  * @param {float } bandwidth        Bandwith per channel, after optional downsampling
  */
 void dadafits_fits_init (const char *template_dir, const char *template_file, char *output_directory,
@@ -211,6 +211,6 @@ void dadafits_fits_init (const char *template_dir, const char *template_file, ch
 
   for (i=0; i<NCHANNELS; i++) {
     fits_weights[i] = 1.0;
-    fits_freqs[i] = min_frequency + (i + 0.5) * bandwidth;
+    fits_freqs[i] = min_frequency + i * bandwidth;
   }
 }
