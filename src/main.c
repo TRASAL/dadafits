@@ -28,7 +28,7 @@
  *          sequence_number := ranges from 0 to 25
  *
  *          with a packet: [t0 .. t499][c0 .. c3][IQUV] total of 500*4*4=8000 bytes
- *          t = tn + sequence_number * 25
+ *          t = tn + sequence_number * 500
  *          c = cn + channel_offset * 4
  *
  * Science case 3, mode 2:
@@ -53,7 +53,7 @@
  *          sequence_number := ranges from 0 to 25
  *
  *          with a packet: [t0 .. t499][c0 .. c3][IQUV] total of 500*4*4=8000 bytes
- *          t = tn + sequence_number * 25
+ *          t = tn + sequence_number * 500
  *          c = cn + channel_offset * 4
  *
  * Science case 4, mode 0:
@@ -78,7 +78,7 @@
  *          sequence_number := ranges from 0 to 50
  *
  *          with a packet: [t0 .. t499][c0 .. c3][IQUV] total of 500*4*4=8000 bytes
- *          t = tn + sequence_number * 50
+ *          t = tn + sequence_number * 500
  *          c = cn + channel_offset * 4
  *
  * Science case 4, mode 2:
@@ -103,7 +103,7 @@
  *          sequence_number := ranges from 0 to 50
  *
  *          with a packet: [t0 .. t499][c0 .. c3][IQUV] total of 500*4*4=8000 bytes
- *          t = tn + sequence_number * 50
+ *          t = tn + sequence_number * 500
  *          c = cn + channel_offset * 4
  *
  * Author: Jisk Attema, Netherlands eScience Center
