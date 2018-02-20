@@ -274,7 +274,7 @@ void parseOptions(int argc, char *argv[], char **key, char **logfile, char **tem
 int main (int argc, char *argv[]) {
   char *key;
   char *logfile;
-  const char *template_file;
+  const char *template_file = NULL;
   char *template_dir = "templates";
   char *table_name = NULL; // optional argument
   char *sb_selection = NULL; // optional argument, defaults to all beams
