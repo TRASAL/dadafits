@@ -220,17 +220,17 @@ void printOptions() {
 void parseOptions(int argc, char *argv[], char **key, char **logfile, char **template_dir, char **table_name, char **sb_selection, char **output_directory) {
   int c;
 
-  int setk=0, setl=0, sett=0, setd=0;
+  int setk=0, setl=0;
   while((c=getopt(argc,argv,"k:l:t:d:s:S:"))!=-1) {
     switch(c) {
       // OPTIONAL: -d <output_directory>
       // DEFAULT: CWD
       case('d'):
         *output_directory = strdup(optarg);
-        setd=1;
         break;
 
-      // -t <template_dir>
+      // OPTIONAL: -t <template_dir>
+      // DEFAULT: CWD/templates
       case('t'):
         *template_dir = strdup(optarg);
         break;
@@ -259,12 +259,13 @@ void parseOptions(int argc, char *argv[], char **key, char **logfile, char **tem
 
       default:
         printOptions();
-        exit(0);
+        fprintf(stderr, "Unknown option: %c\n",  c);
+        exit(EXIT_FAILURE);
     }
   }
 
   // Required arguments
-  if (!setk || !setl || !sett) {
+  if (!setk || !setl) {
     printOptions();
     exit(EXIT_FAILURE);
   }
