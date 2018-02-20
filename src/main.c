@@ -132,7 +132,7 @@ const char *template_case4mode13 = "sc4_IQUV.txt";
 
 // Variables read from ring buffer header
 float min_frequency = 1492;
-float channel_bandwidth = 0.1953125;
+float bandwidth = 300;
 
 // Variables set from commandline
 int make_synthesized_beams = 0;
@@ -189,7 +189,7 @@ dada_hdu_t *init_ringbuffer(char *key) {
   unsigned int uintValue;
   float floatValue[2];
   ascii_header_get(header, "MIN_FREQUENCY", "%f", &min_frequency);
-  ascii_header_get(header, "BW", "%f", &channel_bandwidth);
+  ascii_header_get(header, "BW", "%f", &bandwidth);
   ascii_header_get(header, "PADDED_SIZE", "%i", &padded_size);
   ascii_header_get(header, "SCIENCE_CASE", "%i", &science_case);
   ascii_header_get(header, "SCIENCE_MODE", "%i", &science_mode);
@@ -306,7 +306,7 @@ int main (int argc, char *argv[]) {
   padded_size = 12500;
 #else
   // must init ringbuffer before fits, as this reads parameters
-  // like channel_bandwidth from ring buffer header
+  // like bandwidth from ring buffer header
   dada_hdu_t *ringbuffer = init_ringbuffer(key);
   ipcbuf_t *data_block = (ipcbuf_t *) ringbuffer->data_block;
   ipcio_t *ipc = ringbuffer->data_block;
@@ -397,7 +397,7 @@ int main (int argc, char *argv[]) {
 
   LOG("Output to FITS tabs: %i, channels: %i, polarizations: %i, samples: %i\n", ntabs, nchannels, npols, ntimes);
   dadafits_fits_init(template_dir, template_file, output_directory,
-      ntabs, make_synthesized_beams, min_frequency, channel_bandwidth * NCHANNELS / nchannels);
+      ntabs, make_synthesized_beams, min_frequency, bandwidth / nchannels);
 
   if (science_mode == 1 || science_mode == 3) {
     LOG("Allocating Stokes IQUV transpose buffer (%i,%i,%i,%i)\n", ntabs, NCHANNELS, NPOLS, ntimes);

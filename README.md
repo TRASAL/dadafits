@@ -71,7 +71,7 @@ For values that should be present see the table below.
 |header key| description | notes | units |
 |----------|-------------|-------|-------|
 | MIN\_FREQUENCY | center of lowest frequency band of observation |                          | MHz |
-| BW             | Bandwidth of a frequency channel           |                              | MHz |
+| BW             | Total bandwidth of observation |                                          | MHz |
 | PADDED\_SIZE   | Length of the fastest dimension of the data array |                       | 1 |
 | SCIENCE\_CASE  | Mode of operation of ARTS, determines data rate   | Must be 3 or 4        | 1 |
 | SCIENCE\_MODE  | Mode of operation of ARTS, determines data layout | Either 1,2,3, or 4    | 1 |
