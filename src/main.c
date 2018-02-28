@@ -317,19 +317,12 @@ int main (int argc, char *argv[]) {
     free (logfile);
   }
 
-#ifdef DRY_RUN
-  // hardcoded test case
-  science_case = 3;
-  science_mode = 1;
-  padded_size = 12500;
-#else
   // must init ringbuffer before fits, as this reads parameters
   // like bandwidth from ring buffer header
   dada_hdu_t *ringbuffer = init_ringbuffer(key);
   ipcbuf_t *data_block = (ipcbuf_t *) ringbuffer->data_block;
   ipcio_t *ipc = ringbuffer->data_block;
   uint64_t bufsz = ipc->curbufsz;
-#endif
 
   LOG("dadafits version: " VERSION "\n");
 
@@ -442,28 +435,8 @@ int main (int argc, char *argv[]) {
   // Trap Ctr-C to properly close fits files on exit
   signal(SIGTERM, fits_error_and_exit);
 
-#ifdef DRY_RUN
-  // do 10 iterations with random data, ignore ringbuffer
-  int mysize = ntabs * NCHANNELS * npols * padded_size;
-  LOG("DRY RUN FAKE DATA: ntabs=%i, nchannels=%i, npols=%i, padded_size=%i, mysize=%i\n", ntabs, NCHANNELS, npols, padded_size, mysize);
-  page = malloc(mysize);
-
-  int g_seed = 1234;
-  inline unsigned char fastrand() {
-    g_seed = (214013*g_seed+2531011);
-    // return (g_seed>>16)&0x7FFF;
-    return (g_seed>>16)&0xFF;
-  }
-
-  while(page_count < 10) {
-    int kkk;
-    for(kkk=0; kkk<mysize; kkk++) {
-      page[kkk] = fastrand();
-    }
-#else
   while(!quit && !ipcbuf_eod(data_block)) {
     page = ipcbuf_get_next_read(data_block, &bufsz);
-#endif
 
     int tab; // Tied array beam
     int sb;  // synthesized beam
@@ -568,21 +541,17 @@ int main (int argc, char *argv[]) {
           quit = 1;
           break;
       }
-#ifndef DRY_RUN
       ipcbuf_mark_cleared((ipcbuf_t *) ipc);
-#endif
       page_count++;
     }
   }
 
-#ifndef DRY_RUN
   if (ipcbuf_eod(data_block)) {
     LOG("End of data received\n");
   }
 
   dada_hdu_unlock_read(ringbuffer);
   dada_hdu_disconnect(ringbuffer);
-#endif
 
   LOG("Read %li pages\n", page_count);
 
