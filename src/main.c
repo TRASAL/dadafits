@@ -151,6 +151,7 @@ unsigned char *synthesized = NULL; // Stokes IQUV for a single synthesized beam
  */
 dada_hdu_t *init_ringbuffer(char *key) {
   uint64_t nbufs;
+  int header_incomplete = 0;
 
   multilog_t* multilog = NULL; // TODO: See if this is used in anyway by dada
 
@@ -186,13 +187,26 @@ dada_hdu_t *init_ringbuffer(char *key) {
   }
 
   // parse header
-  unsigned int uintValue;
-  float floatValue[2];
-  ascii_header_get(header, "MIN_FREQUENCY", "%f", &min_frequency);
-  ascii_header_get(header, "BW", "%f", &bandwidth);
-  ascii_header_get(header, "PADDED_SIZE", "%i", &padded_size);
-  ascii_header_get(header, "SCIENCE_CASE", "%i", &science_case);
-  ascii_header_get(header, "SCIENCE_MODE", "%i", &science_mode);
+  if (ascii_header_get(header, "MIN_FREQUENCY", "%f", &min_frequency) == -1) {
+    LOG("ERROR. MIN_FREQUENCY not set in dada buffer\n");
+    header_incomplete = 1;
+  }
+  if (ascii_header_get(header, "BW", "%f", &bandwidth) == -1) {
+    LOG("ERROR. BW not set in dada buffer\n");
+    header_incomplete = 1;
+  }
+  if (ascii_header_get(header, "PADDED_SIZE", "%i", &padded_size) == -1) {
+    LOG("ERROR. PADDED_SIZE not set in dada buffer\n");
+    header_incomplete = 1;
+  }
+  if (ascii_header_get(header, "SCIENCE_CASE", "%i", &science_case) == -1) {
+    LOG("ERROR. SCIENCE_CASE not set in dada buffer\n");
+    header_incomplete = 1;
+  }
+  if (ascii_header_get(header, "SCIENCE_MODE", "%i", &science_mode) == -1) {
+    LOG("ERROR. SCIENCE_MODE not set in dada buffer\n");
+    header_incomplete = 1;
+  }
 
   // tell the ringbuffer the header has been read
   if (ipcbuf_mark_cleared(hdu->header_block) < 0) {
@@ -201,6 +215,10 @@ dada_hdu_t *init_ringbuffer(char *key) {
   }
 
   LOG("psrdada HEADER:\n%s\n", header);
+
+  if (header_incomplete) {
+    exit(EXIT_FAILURE);
+  }
 
   return hdu;
 }
