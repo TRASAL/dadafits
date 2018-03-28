@@ -1,3 +1,14 @@
+#define BYTE_TO_BINARY_PATTERN "%c%c%c%c%c%c%c%c"
+#define BYTE_TO_BINARY(byte)  \
+  (byte & 0x80 ? '1' : '0'), \
+  (byte & 0x40 ? '1' : '0'), \
+  (byte & 0x20 ? '1' : '0'), \
+  (byte & 0x10 ? '1' : '0'), \
+  (byte & 0x08 ? '1' : '0'), \
+  (byte & 0x04 ? '1' : '0'), \
+  (byte & 0x02 ? '1' : '0'), \
+  (byte & 0x01 ? '1' : '0')
+
 #include <string.h>
 #include <stdio.h>
 #include "fitsio.h"
@@ -32,9 +43,54 @@ void print_table(fitsfile *fptr) {
       case TCOMPLEX:    printf("%03i %10s TCOMPLEX %li %li\n", c, colname, repeat, width); break;
       case TDBLCOMPLEX: printf("%03i %10s TDBLCOMPLEX %li %li\n", c, colname, repeat, width); break;
       // case TINT32BIT:   printf("%03i TINT32BIT %li %li\n", c, colname, repeat, width); break;
-      default:          printf("%03i %10s Unknown typecode\n", c, colname); break;
+      default:          printf("%03i %10s Unknown %li %li\n", c, colname, repeat, width); break;
     }
     fits_get_colname(fptr, CASEINSEN, "*", colname, &c, &status);
+  }
+
+}
+
+void fitsinfo(fitsfile *fptr) {
+  int status;
+  fits_movabs_hdu(fptr, 2, NULL, &status);
+
+  int i;
+  int column;
+
+  status = 0;
+  fits_get_colnum(fptr, 0, "OFFS_SUB", &column, &status);
+  if (status) fits_report_error(stdout, status);
+
+  double offs_sub;
+  for (i=1; i<=20; i++){
+    status = 0;
+    fits_read_col(fptr, TDOUBLE, column, i, 1L, 1L, 0, &offs_sub, NULL, &status);
+    if (status) fits_report_error(stdout, status);
+    printf("OFFS_SUB: %e\n", offs_sub);
+  }
+
+  int cf, cw, cs, co;
+  status = 0; fits_get_colnum(fptr, 0, "DAT_FREQ", &cf, &status);
+  status = 0; fits_get_colnum(fptr, 0, "DAT_WTS", &cw, &status);
+  status = 0; fits_get_colnum(fptr, 0, "DAT_OFFS", &co, &status);
+  status = 0; fits_get_colnum(fptr, 0, "DAT_SCL", &cs, &status);
+
+  printf("\n\nFrequencies, weights, scales and offsets for the first subint:\n");
+  float freqs[384], wts[384], scale[384], offs[384];
+  status = 0; fits_read_col(fptr, TFLOAT, cf, 1L, 1L, 384L, 0, freqs, NULL, &status);
+  status = 0; fits_read_col(fptr, TFLOAT, cw, 1L, 1L, 384L, 0, wts, NULL, &status);
+  status = 0; fits_read_col(fptr, TFLOAT, cs, 1L, 1L, 384L, 0, scale, NULL, &status);
+  status = 0; fits_read_col(fptr, TFLOAT, co, 1L, 1L, 384L, 0, offs, NULL, &status);
+  for (i=0; i<384; i++){
+    printf("%i %lf %lf %lf %lf\n", i, freqs[i], wts[i], scale[i], offs[i]);
+  }
+
+  printf("\n\nData for the first subint:\n");
+  unsigned char data[500 * 384];
+  status = 0; fits_get_colnum(fptr, 0, "DATA", &column, &status);
+  status = 0; fits_read_col(fptr, TBYTE, column, 1L, 1L, 384 * 500, 0, data, NULL, &status);
+  for (i=0; i< 500 * 384; i++) {
+    printf("%i %i\n", i, data[i]);
   }
 }
 
@@ -42,7 +98,10 @@ void print_hdus(fitsfile *fptr) {
   int hdunum;
   int status;
 
+  status = 0;
   fits_get_num_hdus(fptr, &hdunum, &status);
+  fits_report_error(stdout, status);
+
   printf("File contains %i HDUs\n", hdunum);
 
   int h;
@@ -66,10 +125,22 @@ void print_hdus(fitsfile *fptr) {
         break;
     }
   }
-  printf("Status is %i\n", status);
 }
 
 int main(int argc, char *argv[]) {
+  int status;
+  fitsfile *fptr;
+
+  printf("Opening: '%s'\n", argv[1]);
+  status = 0;
+  fits_open_file(&fptr, argv[1], READONLY, &status);
+
+  fitsinfo(fptr);
+
+  fits_close_file (fptr, &status);
+}
+
+int write_example(int argc, char *argv[]) {
   int status;
   fitsfile *fptr;
 
