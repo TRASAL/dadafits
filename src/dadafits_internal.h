@@ -33,8 +33,8 @@ extern int science_case;
 extern int science_mode;
 extern int padded_size;
 
-extern unsigned int downsampled[NCHANNELS_LOW * NTIMES_LOW];
-extern unsigned char packed[NCHANNELS_LOW * NTIMES_LOW / 8];
+extern unsigned int downsampled[NTIMES_LOW * NCHANNELS_LOW];
+extern unsigned char packed[NTIMES_LOW * NCHANNELS_LOW / 8];
 extern unsigned char *transposed;
 
 extern float fits_offset[NCHANNELS * NPOLS];
