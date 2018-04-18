@@ -201,7 +201,7 @@ void dadafits_fits_init (const char *template_dir, const char *template_file, co
   utc_start_fixed[ 3] = utc_start[3];
   utc_start_fixed[ 4] = '-';
   utc_start_fixed[ 5] = utc_start[5];
-  utc_start_fixed[ 5] = utc_start[6];
+  utc_start_fixed[ 6] = utc_start[6];
   utc_start_fixed[ 7] = '-';
   utc_start_fixed[ 8] = utc_start[8];
   utc_start_fixed[ 9] = utc_start[9];
