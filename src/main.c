@@ -215,11 +215,11 @@ dada_hdu_t *init_ringbuffer(char *key) {
     LOG("ERROR. SCIENCE_MODE not set in dada buffer\n");
     header_incomplete = 1;
   }
-  if (ascii_header_get(header, "RA", "%s", ra_hms) == -1) {
+  if (ascii_header_get(header, "RA_HMS", "%s", ra_hms) == -1) {
     LOG("ERROR. RA not set in dada buffer\n");
     header_incomplete = 1;
   }
-  if (ascii_header_get(header, "DEC", "%s", dec_hms) == -1) {
+  if (ascii_header_get(header, "DEC_HMS", "%s", dec_hms) == -1) {
     LOG("ERROR. DEC not set in dada buffer\n");
     header_incomplete = 1;
   }
