@@ -13,8 +13,9 @@
  *
  * @param {uchar[NCHANNELS, padded_size]} buffer        Buffer page to downsample
  * @param {int} padded_size                             Size of fastest dimension, as timeseries are padded for optimal memory layout on GPU
+ * @param {uint[NCHANNELS_LOW, NTIMES_LOW]} downsampled Output array holding downsampled data
  */
-void downsample_sc3(const unsigned char *buffer, const int padded_size) {
+void downsample_sc3(const unsigned char *buffer, const int padded_size, unsigned int downsampled[NCHANNELS_LOW * NTIMES_LOW]) {
   unsigned int *temp1 = downsampled;
   int dc; // downsampled channel
   int dt; // downsampled time
@@ -45,7 +46,7 @@ void downsample_sc3(const unsigned char *buffer, const int padded_size) {
   }
 }
 
-void downsample_sc4(const unsigned char *buffer, const int padded_size) {
+void downsample_sc4(const unsigned char *buffer, const int padded_size, unsigned int downsampled[NCHANNELS_LOW * NTIMES_LOW]) {
   unsigned int *temp1 = downsampled;
   int dc; // downsampled channel
   int dt; // downsampled time

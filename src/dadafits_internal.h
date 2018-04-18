@@ -33,10 +33,6 @@ extern int science_case;
 extern int science_mode;
 extern int padded_size;
 
-extern unsigned int downsampled[NTIMES_LOW * NCHANNELS_LOW];
-extern unsigned char packed[NTIMES_LOW * NCHANNELS_LOW / 8];
-extern unsigned char *transposed;
-
 extern float fits_offset[NCHANNELS * NPOLS];
 extern float fits_scale[NCHANNELS * NPOLS];
 extern float fits_weights[NCHANNELS];
@@ -49,8 +45,8 @@ extern int synthesized_beam_count; // number of SBs in the table
 // Function definitions
 
 // from downsample.c
-extern void downsample_sc3(const unsigned char *buffer, const int padded_size);
-extern void downsample_sc4(const unsigned char *buffer, const int padded_size);
+extern void downsample_sc3(const unsigned char *buffer, const int padded_size, unsigned int downsampled[NCHANNELS_LOW * NTIMES_LOW]);
+extern void downsample_sc4(const unsigned char *buffer, const int padded_size, unsigned int downsampled[NCHANNELS_LOW * NTIMES_LOW]);
 
 // from sb_util.c
 extern int read_synthesized_beam_table(char *fname);
@@ -63,7 +59,7 @@ extern void close_fits();
 extern void fits_error_and_exit(int status); // needed for trapping C-c
 
 // from manipulate.c
-extern void deinterleave (const unsigned char *page, const int ntabs, const int sequence_length);
-extern void pack_sc34();
+extern void deinterleave (const unsigned char *page, const int ntabs, const int sequence_length, unsigned char *transposed);
+extern void pack_sc34(unsigned int downsampled[NCHANNELS_LOW * NTIMES_LOW], unsigned char packed[NCHANNELS_LOW * NTIMES_LOW/8]);
 
 #endif

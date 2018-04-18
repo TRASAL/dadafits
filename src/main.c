@@ -451,15 +451,15 @@ int main (int argc, char *argv[]) {
           for (tab = 0; tab < ntabs; tab++) {
             // move data from the page to the downsampled array
             if (science_case == 3) {
-              downsample_sc3(&page[tab * NCHANNELS * padded_size], padded_size);
+              downsample_sc3(&page[tab * NCHANNELS * padded_size], padded_size, downsampled);
             } else if (science_case == 4) {
-              downsample_sc4(&page[tab * NCHANNELS * padded_size], padded_size);
+              downsample_sc4(&page[tab * NCHANNELS * padded_size], padded_size, downsampled);
             } else {
               exit(EXIT_FAILURE);
             }
             // pack data from the downsampled array to the packed array,
             // and set scale and offset arrays with used values
-            pack_sc34();
+            pack_sc34(downsampled, packed);
 
             // NOTE: Use hardcoded values instead of the variables ntimes, nchannels, npols
             // because at this point in the program they can only have these values, and this could
@@ -479,7 +479,7 @@ int main (int argc, char *argv[]) {
         case 1:
         case 3:
           // transpose data from page to transposed buffer
-          deinterleave(page, ntabs, sequence_length);
+          deinterleave(page, ntabs, sequence_length, transposed);
 
           if (make_synthesized_beams) {
             // synthesize beams

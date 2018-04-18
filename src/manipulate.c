@@ -8,8 +8,11 @@
 /**
  * Pack series of 8-bit StokesI to 1-bit
  *   NBIN*NCHAN*NPOL*NSBLK => 1 x 384 x 1 x 500 bits equals or 24000 bytes
+ *
+ *   @param {uint[]}  downsampled[NCHANNELS_LOW * NTIMES_LOW]
+ *   @param {uchar[]} packed[NCHANNELS_LOW * NTIMES_LOW / 8]
  */
-void pack_sc34() {
+void pack_sc34(unsigned int downsampled[NCHANNELS_LOW * NTIMES_LOW], unsigned char packed[NCHANNELS_LOW * NTIMES_LOW/8]) {
   unsigned int *temp1;
   unsigned char *temp2;
 
@@ -96,11 +99,12 @@ void pack_sc34() {
  *   1. realtime: ringbuffer -> [trigger] -> dada_dbdisk
  *   2. offline: dada_dbdisk -> ringbuffer -> dadafits
  *
- *  @param {const unsigned char *} page    Ringbuffer page with interleaved data
- *  @param {int} ntabs                     Number of tabs
- *  @param {int} sequence_length           Number of packets per
+ *  @param {const uchar[]} page                 Ringbuffer page with interleaved data
+ *  @param {int}           ntabs                Number of tabs
+ *  @param {int}           sequence_length      Number of packets per
+ *  @param {uchar[]}       transposed           Output buffer to hold deinterleaved data. Size: ntabs*NCHANNELS*NPOLS*ntimes
  */
-void deinterleave (const unsigned char *page, const int ntabs, const int sequence_length) {
+void deinterleave (const unsigned char *page, const int ntabs, const int sequence_length, unsigned char *transposed) {
   // ring buffer page contains matrix:
   //   [tab][channel_offset][sequence_number][8000]
   //
