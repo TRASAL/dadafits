@@ -8,6 +8,7 @@
   (byte & 0x04 ? '1' : '0'), \
   (byte & 0x02 ? '1' : '0'), \
   (byte & 0x01 ? '1' : '0')
+// printf( BYTE_TO_BINARY_PATTERN "\n", BYTE_TO_BINARY(data[i]));
 
 #include <string.h>
 #include <stdio.h>
@@ -51,46 +52,52 @@ void print_table(fitsfile *fptr) {
 }
 
 void fitsinfo(fitsfile *fptr) {
-  int status;
-  fits_movabs_hdu(fptr, 2, NULL, &status);
+  int status = 0;
+  fits_movabs_hdu(fptr, 2, NULL, &status); if (status) fits_report_error(stdout, status);
 
-  int i;
-  int column;
-
-  status = 0;
-  fits_get_colnum(fptr, 0, "OFFS_SUB", &column, &status);
-  if (status) fits_report_error(stdout, status);
+  int cf, cw, cs, co, cos, cd;
+  status = 0; fits_get_colnum(fptr, 0, "OFFS_SUB", &cos, &status); if (status) fits_report_error(stdout, status);
+  status = 0; fits_get_colnum(fptr, 0, "DAT_FREQ", &cf, &status); if (status) fits_report_error(stdout, status);
+  status = 0; fits_get_colnum(fptr, 0, "DAT_WTS", &cw, &status); if (status) fits_report_error(stdout, status);
+  status = 0; fits_get_colnum(fptr, 0, "DAT_OFFS", &co, &status); if (status) fits_report_error(stdout, status);
+  status = 0; fits_get_colnum(fptr, 0, "DAT_SCL", &cs, &status); if (status) fits_report_error(stdout, status);
+  status = 0; fits_get_colnum(fptr, 0, "DATA", &cd, &status); if (status) fits_report_error(stdout, status);
 
   double offs_sub;
-  for (i=1; i<=20; i++){
-    status = 0;
-    fits_read_col(fptr, TDOUBLE, column, i, 1L, 1L, 0, &offs_sub, NULL, &status);
-    if (status) fits_report_error(stdout, status);
-    printf("OFFS_SUB: %e\n", offs_sub);
-  }
-
-  int cf, cw, cs, co;
-  status = 0; fits_get_colnum(fptr, 0, "DAT_FREQ", &cf, &status);
-  status = 0; fits_get_colnum(fptr, 0, "DAT_WTS", &cw, &status);
-  status = 0; fits_get_colnum(fptr, 0, "DAT_OFFS", &co, &status);
-  status = 0; fits_get_colnum(fptr, 0, "DAT_SCL", &cs, &status);
-
-  printf("\n\nFrequencies, weights, scales and offsets for the first subint:\n");
   float freqs[384], wts[384], scale[384], offs[384];
-  status = 0; fits_read_col(fptr, TFLOAT, cf, 1L, 1L, 384L, 0, freqs, NULL, &status);
-  status = 0; fits_read_col(fptr, TFLOAT, cw, 1L, 1L, 384L, 0, wts, NULL, &status);
-  status = 0; fits_read_col(fptr, TFLOAT, cs, 1L, 1L, 384L, 0, scale, NULL, &status);
-  status = 0; fits_read_col(fptr, TFLOAT, co, 1L, 1L, 384L, 0, offs, NULL, &status);
-  for (i=0; i<384; i++){
-    printf("%i %lf %lf %lf %lf\n", i, freqs[i], wts[i], scale[i], offs[i]);
-  }
+  unsigned char data[384 * 500 / 8]; // array of 1 bit datapoints of [channel=384, time=500]
 
-  printf("\n\nData for the first subint:\n");
-  unsigned char data[500 * 384];
-  status = 0; fits_get_colnum(fptr, 0, "DATA", &column, &status);
-  status = 0; fits_read_col(fptr, TBYTE, column, 1L, 1L, 384 * 500, 0, data, NULL, &status);
-  for (i=0; i< 500 * 384; i++) {
-    printf("%i %i\n", i, data[i]);
+  long nrows;
+  fits_get_num_rows(fptr, &nrows, &status);
+
+  for (long row = 1; row <= nrows; row++) {
+    int channel, time, channeltime;
+
+    status = 0; fits_read_col(fptr, TDOUBLE, cos, row, 1L, 1L, 0, &offs_sub, NULL, &status);
+    status = 0; fits_read_col(fptr, TFLOAT, cf, row, 1L, 384L, 0, freqs, NULL, &status);
+    status = 0; fits_read_col(fptr, TFLOAT, cw, row, 1L, 384L, 0, wts,   NULL, &status);
+    status = 0; fits_read_col(fptr, TFLOAT, cs, row, 1L, 384L, 0, scale, NULL, &status);
+    status = 0; fits_read_col(fptr, TFLOAT, co, row, 1L, 384L, 0, offs,  NULL, &status);
+    status = 0; fits_read_col(fptr, TBYTE, cd, 1L, 1L, 384 * 500 / 8, 0, data, NULL, &status);
+    if (status) fits_report_error(stdout, status);
+
+    printf("\n\n# Frequencies, weights, scales and offsets for subint: %li, subint offset %e\n", row, offs_sub);
+
+    for (channel=0; channel<384; channel++){
+      printf("%i %lf %lf %lf %lf\n", channel, freqs[channel], wts[channel], scale[channel], offs[channel]);
+    }
+
+    printf("\n\n# Data, 1 bit, shown per byte [channel, time]:\n");
+
+    for (channeltime=0; channeltime<384*500/8; channeltime++) {
+      channel = (channeltime * 8) / 500;
+      time = (channeltime * 8) % 500;
+      if (channeltime % 20 == 0) {
+        printf( "\n[channel= % 6i, time=  % 6i] ", channel, time);
+      }
+      printf( " % 4i", data[channeltime]);
+    }
+    printf("\n");
   }
 }
 

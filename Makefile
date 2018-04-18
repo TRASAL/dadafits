@@ -21,5 +21,5 @@ HEADERS := src/dadafits_internal.h
 dadafits: $(SOURCES) $(HEADERS)
 	gcc $(FITS_CFLAGS) -o dadafits $(SOURCES) $(DADA_DEPS) $(FITS_LIBS) -lm -I"$(PSRDADA)/src" $(OPTIMIZATION) -DVERSION='"$(VERSION)"'
 
-fits_example: fits_example.c
-	gcc $(FITS_CFLAGS) $(OPTIMIZATION) -o fits_example fits_example.c $(FITS_LIBS)
+fits_dump: fits_dump.c
+	gcc $(FITS_CFLAGS) $(OPTIMIZATION) -o fits_dump fits_dump.c $(FITS_LIBS)
