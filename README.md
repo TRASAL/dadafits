@@ -1,4 +1,4 @@
-# dadafilterbank
+# dadafits
 
 Connect to a [PSRdada](http://psrdada.sourceforge.net/) ringbuffer, optionally downsample and compress, and write out the data in [FITS](https://fits.gsfc.nasa.gov/fits_home.html) format.
 
