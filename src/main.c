@@ -231,14 +231,6 @@ dada_hdu_t *init_ringbuffer(char *key) {
     LOG("ERROR. UTC_START not set in dada buffer\n");
     header_incomplete = 1;
   }
-  if (ascii_header_get(header, "ZA_START", "%lf", &za_start) == -1) {
-    LOG("ERROR. ZA_START not set in dada buffer\n");
-    header_incomplete = 1;
-  }
-  if (ascii_header_get(header, "AZ_START", "%lf", &az_start) == -1) {
-    LOG("ERROR. AZ_START not set in dada buffer\n");
-    header_incomplete = 1;
-  }
   if (ascii_header_get(header, "MJD_START", "%lf", &mjd_start) == -1) {
     LOG("ERROR. MJD_START not set in dada buffer\n");
     header_incomplete = 1;
