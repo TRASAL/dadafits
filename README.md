@@ -124,6 +124,7 @@ Building is then done using the Makefile:
 # Contributers
 
 Jisk Attema, Netherlands eScience Center
+Leon Oostrum, ASTRON / UvA
 
 # NOTES
 
