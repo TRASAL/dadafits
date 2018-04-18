@@ -1,3 +1,4 @@
+#include <math.h>
 #include <fitsio.h>
 #include "dadafits_internal.h"
 
@@ -16,6 +17,8 @@ int col_offset = 15;
 int col_scale = 16;
 int col_weights = 14;
 int col_offs_sub = 2;
+int col_telaz = 12;
+int col_telza = 13;
 
 /**
  * pretty print the fits error to the log, and close down cleanly
@@ -85,8 +88,10 @@ int dadafits_find_column(char *name, fitsfile *file) {
  * @param {const int} rowid              Row number in the SUBINT table, corresponds to ringbuffer page number + 1
  * @param {const int} rowlength          Size of a data row
  * @param {const unsigned char *} data   Row to write
+ * @param {const float} telaz
+ * @param {const float} telza
  */
-void write_fits(const int tab, const int channels, const int pols, const long rowid, const int rowlength, unsigned char *data) {
+void write_fits(const int tab, const int channels, const int pols, const long rowid, const int rowlength, unsigned char *data, float telaz, float telza) {
   int status;
   fitsfile *fptr = output[tab];
 
@@ -101,6 +106,27 @@ void write_fits(const int tab, const int channels, const int pols, const long ro
   // }
 
   double offs_sub = (double) rowid * 1.024; // OFFS_SUB is in seconds since start of run, but may not be zero
+
+  if (col_offs_sub >= 0) {
+    status = 0;
+    if (fits_write_col(fptr, TDOUBLE, col_offs_sub, rowid, 1, 1, &offs_sub, &status)) {
+      fits_error_and_exit(status);
+    }
+  }
+
+  if (col_telaz >= 0) {
+    status = 0;
+    if (fits_write_col(fptr, TFLOAT, col_telaz, rowid, 1, 1, &telaz, &status)) {
+      fits_error_and_exit(status);
+    }
+  }
+
+  if (col_telza >= 0) {
+    status = 0;
+    if (fits_write_col(fptr, TFLOAT, col_telza, rowid, 1, 1, &telza, &status)) {
+      fits_error_and_exit(status);
+    }
+  }
 
   if (col_offs_sub >= 0) {
     status = 0;
@@ -152,13 +178,51 @@ void write_fits(const int tab, const int channels, const int pols, const long ro
  * @param {int} mode                0: one file per tab, 1: one file per selected synthesized beam
  * @param {float } min_frequency    Center of lowest frequency band of observation
  * @param {float } channelwidth     Width per channel, after optional downsampling
+ * @param {char *} ra_hms           Right ascension
+ * @param {char *} dec_hms          Declination
+ * @param {char *} source_name      Name of the source (maps to src_name)
+ * @param (char *) utc_start        Timestamp of start of the observation (UTC), program will silently apply correct field separators YYYY-MM-DDThh:mm:ss
+ * @param (double) mjd_start        Start time of the observation in days
+ * @param (double) lst_start        Local siderial time in degrees
  */
-void dadafits_fits_init (const char *template_dir, const char *template_file, char *output_directory,
-    int ntabs, int mode, float min_frequency, float channelwidth) {
+void dadafits_fits_init (const char *template_dir, const char *template_file, const char *output_directory,
+    const int ntabs, const int mode, const float min_frequency, const float channelwidth, char *ra_hms, char *dec_hms,
+    char *source_name, const char *utc_start, const double mjd_start, double lst_start) {
+  char utc_start_fixed[256];
   int status;
   float version;
   fits_get_version(&version);
   LOG("Using FITS library version %f\n", version);
+
+  // fix utc_start to YYYY-MM-DDThh:mm:ss
+  utc_start_fixed[ 0] = utc_start[0];
+  utc_start_fixed[ 1] = utc_start[1];
+  utc_start_fixed[ 2] = utc_start[2];
+  utc_start_fixed[ 3] = utc_start[3];
+  utc_start_fixed[ 4] = '-';
+  utc_start_fixed[ 5] = utc_start[5];
+  utc_start_fixed[ 5] = utc_start[6];
+  utc_start_fixed[ 7] = '-';
+  utc_start_fixed[ 8] = utc_start[8];
+  utc_start_fixed[ 9] = utc_start[9];
+  utc_start_fixed[10] = 'T';
+  utc_start_fixed[11] = utc_start[11];
+  utc_start_fixed[12] = utc_start[12];
+  utc_start_fixed[13] = ':';
+  utc_start_fixed[14] = utc_start[14];
+  utc_start_fixed[15] = utc_start[15];
+  utc_start_fixed[16] = ':';
+  utc_start_fixed[17] = utc_start[17];
+  utc_start_fixed[18] = utc_start[18];
+  utc_start_fixed[19] = '\0';
+
+  // convert START_MJD to
+  // STT_IMJD [days] Start MJD (UTC days) (J - long integer)
+  // STT_SMJD [s]    Start time (sec past UTC 00h) (J)
+  // STT_OFFS [s]    Start time offset (D)
+  unsigned long stt_imjd = floor(mjd_start);
+  int stt_smjd = floor((mjd_start - stt_imjd) * 24 * 60 * 60);
+  double stt_offs = ((mjd_start - stt_imjd) * 24 * 60 * 60) - stt_smjd;
 
   // set filename prefix according to mode:
   char *prefix;
@@ -195,8 +259,16 @@ void dadafits_fits_init (const char *template_dir, const char *template_file, ch
     status = 0; if (fits_create_file(&fptr, fname, &status)) fits_error_and_exit(status);
     status = 0; if (fits_movabs_hdu(fptr, 1, NULL, &status)) fits_error_and_exit(status);
     status = 0; if (fits_write_date(fptr, &status))          fits_error_and_exit(status);
-    status = 0; if (fits_write_chksum(fptr, &status))        fits_error_and_exit(status);
+    status = 0; if (fits_update_key(fptr, TSTRING, "RA", ra_hms, NULL, &status)) fits_error_and_exit(status);
+    status = 0; if (fits_update_key(fptr, TSTRING, "DEC", dec_hms, NULL, &status)) fits_error_and_exit(status);
+    status = 0; if (fits_update_key(fptr, TSTRING, "SRC_NAME", source_name, NULL, &status)) fits_error_and_exit(status);
+    status = 0; if (fits_update_key(fptr, TSTRING, "DATE-OBS", utc_start_fixed, NULL, &status)) fits_error_and_exit(status);
+    status = 0; if (fits_update_key(fptr, TULONG, "STT_IMJD", &stt_imjd, NULL, &status)) fits_error_and_exit(status);
+    status = 0; if (fits_update_key(fptr, TINT, "STT_SMJD", &stt_smjd, NULL, &status)) fits_error_and_exit(status);
+    status = 0; if (fits_update_key(fptr, TDOUBLE, "STT_OFFS", &stt_offs, NULL, &status)) fits_error_and_exit(status);
+    status = 0; if (fits_update_key(fptr, TDOUBLE, "STT_LST", &lst_start, NULL, &status)) fits_error_and_exit(status);
 
+    status = 0; if (fits_write_chksum(fptr, &status))        fits_error_and_exit(status);
     status = 0; if (fits_movabs_hdu(fptr, 2, NULL, &status)) fits_error_and_exit(status);
 
     output[t] = fptr;

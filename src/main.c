@@ -133,6 +133,14 @@ const char *template_case4mode13 = "sc4_IQUV.txt";
 // Variables read from ring buffer header
 float min_frequency = 1492;
 float bandwidth = 300;
+char ra_hms[256];
+char dec_hms[256];
+char source_name[256];
+char utc_start[256];
+double mjd_start;
+double lst_start;
+float az_start;
+float za_start;
 
 // Variables set from commandline
 int make_synthesized_beams = 0;
@@ -205,6 +213,46 @@ dada_hdu_t *init_ringbuffer(char *key) {
   }
   if (ascii_header_get(header, "SCIENCE_MODE", "%i", &science_mode) == -1) {
     LOG("ERROR. SCIENCE_MODE not set in dada buffer\n");
+    header_incomplete = 1;
+  }
+  if (ascii_header_get(header, "RA", "%s", ra_hms) == -1) {
+    LOG("ERROR. RA not set in dada buffer\n");
+    header_incomplete = 1;
+  }
+  if (ascii_header_get(header, "DEC", "%s", dec_hms) == -1) {
+    LOG("ERROR. DEC not set in dada buffer\n");
+    header_incomplete = 1;
+  }
+  if (ascii_header_get(header, "SOURCE", "%s", source_name) == -1) {
+    LOG("ERROR. SOURCE not set in dada buffer\n");
+    header_incomplete = 1;
+  }
+  if (ascii_header_get(header, "UTC_START", "%s", utc_start) == -1) {
+    LOG("ERROR. UTC_START not set in dada buffer\n");
+    header_incomplete = 1;
+  }
+  if (ascii_header_get(header, "ZA_START", "%lf", &za_start) == -1) {
+    LOG("ERROR. ZA_START not set in dada buffer\n");
+    header_incomplete = 1;
+  }
+  if (ascii_header_get(header, "AZ_START", "%lf", &az_start) == -1) {
+    LOG("ERROR. AZ_START not set in dada buffer\n");
+    header_incomplete = 1;
+  }
+  if (ascii_header_get(header, "MJD_START", "%lf", &mjd_start) == -1) {
+    LOG("ERROR. MJD_START not set in dada buffer\n");
+    header_incomplete = 1;
+  }
+  if (ascii_header_get(header, "LST_START", "%lf", &lst_start) == -1) {
+    LOG("ERROR. LST_START not set in dada buffer\n");
+    header_incomplete = 1;
+  }
+  if (ascii_header_get(header, "AZ_START", "%f", &az_start) == -1) {
+    LOG("ERROR. AZ_START not set in dada buffer\n");
+    header_incomplete = 1;
+  }
+  if (ascii_header_get(header, "ZA_START", "%f", &za_start) == -1) {
+    LOG("ERROR. ZA_START not set in dada buffer\n");
     header_incomplete = 1;
   }
 
@@ -408,7 +456,8 @@ int main (int argc, char *argv[]) {
 
   LOG("Output to FITS tabs: %i, channels: %i, polarizations: %i, samples: %i\n", ntabs, nchannels, npols, ntimes);
   dadafits_fits_init(template_dir, template_file, output_directory,
-      ntabs, make_synthesized_beams, min_frequency, bandwidth / nchannels);
+      ntabs, make_synthesized_beams, min_frequency, bandwidth / nchannels,
+      ra_hms, dec_hms, source_name, utc_start, mjd_start, lst_start);
 
   if (science_mode == 1 || science_mode == 3) {
     LOG("Allocating Stokes IQUV transpose buffer (%i,%i,%i,%i)\n", ntabs, NCHANNELS, NPOLS, ntimes);
@@ -470,7 +519,8 @@ int main (int argc, char *argv[]) {
               1, // only Stokes I
               page_count + 1, // page_count starts at 0, but FITS rowid at 1
               NCHANNELS_LOW * NTIMES_LOW / 8,
-              packed // write data from the packed array to file, also uses scale, weights, and offset arrays
+              packed, // write data from the packed array to file, also uses scale, weights, and offset arrays
+              az_start, za_start
             );
           }
           break;
@@ -514,7 +564,8 @@ int main (int argc, char *argv[]) {
                   NPOLS, // full Stokes IQUV
                   page_count + 1, // page_count starts at 0, but FITS rowid at 1
                   NCHANNELS * NPOLS * ntimes,
-                  synthesized
+                  synthesized,
+                  az_start, za_start
                 );
               }
             }
@@ -529,7 +580,8 @@ int main (int argc, char *argv[]) {
                 NPOLS, // full Stokes IQUV
                 page_count + 1, // page_count starts at 0, but FITS rowid at 1
                 NCHANNELS * NPOLS * ntimes,
-                &transposed[tab * NCHANNELS * NPOLS * ntimes]
+                &transposed[tab * NCHANNELS * NPOLS * ntimes],
+                az_start, za_start
               );
             }
           }

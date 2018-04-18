@@ -68,13 +68,21 @@ Metadata is read from the PSRdada header block.
 Note that some of the metadata available in the header block is ignored, due to code constraints and optimizations.
 For values that should be present see the table below.
 
-|header key| description | notes | units |
-|----------|-------------|-------|-------|
-| MIN\_FREQUENCY | center of lowest frequency band of observation |                          | MHz |
-| BW             | Total bandwidth of observation |                                          | MHz |
-| PADDED\_SIZE   | Length of the fastest dimension of the data array |                       | 1 |
-| SCIENCE\_CASE  | Mode of operation of ARTS, determines data rate   | Must be 3 or 4        | 1 |
-| SCIENCE\_MODE  | Mode of operation of ARTS, determines data layout | Either 1,2,3, or 4    | 1 |
+|header key      | type    | units | description | notes |
+|----------------|---------|-------|-------------|-------|
+| MIN\_FREQUENCY | double  | Mhz                 | Center of lowest frequency band of observation    |  |
+| BW             | double  | Mhz                 | Total bandwidth of observation                    |  |
+| PADDED\_SIZE   | int     | bytes               | Length of the fastest dimension of the data array |  |
+| SCIENCE\_CASE  | int     | 1                   | Mode of operation of ARTS, determines data rate   | Must be 3 or 4 |
+| SCIENCE\_MODE  | int     | 1                   | Mode of operation of ARTS, determines data layout | Either 1,2,3, or 4 |
+| RA\_HMS        | string  | HH:MM:SS.ssss       | Right ascension                                   | maps to RA |
+| DEC\_HMS       | string  |+HH:MM:SS.ssss       | Declination                                       | maps to DEC |
+| SOURCE         | string  |                     |                                                   | maps to SRC\_NAME |
+| UTC\_START     | char    | YYYY-MM-DD-HH:MM:SS | FITS and DADA use different separators, the program will silently update the timestamp to use the right one for FITS | maps to DATE-OBS |
+| MJD\_START     | double  | days since epoch    | Modified Julian Date                              | maps to STT\_IMJD and STT\_SMJD |
+| LST\_START     | double  | degrees             | Local siderial time                               | maps to STT\_LST |
+| AZ\_START      | float   | degrees             |                                                   | set per row in the SUBINT binary table as TEL\_AZ, assumed constant over the run |
+| ZA\_START      | float   | degrees             |                                                   | set per row in the SUBINT binary table as TEL\_ZEN, assumed constant over the run |
 
 ## Data block
 
