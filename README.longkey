@@ -1,0 +1,52 @@
+Long keys
+---------
+
+We need to provide more metadata than fits in FITS ;)
+Additionally, the metadata is mal-formed, and can contain characters not allowed in fits headers like quotes, brackets and slashes and newlines.
+A workaround is to encode the data in a FITS friendly character set.
+Once we're encoding anyways, we might as well first compress the data.
+
+Going over some python documentation, using built-in function, we end up with something like:
+```python
+"long string".encode('bz2').encode('hex')
+```
+
+and, the reverse:
+```python
+"garbled".decode('hex').decode('bz2')
+```
+
+
+Create an empty FITS file with realistic header, containing a long string:
+```bash
+$ make longkey
+$ ./longkey
+```
+
+Let's see how a simple FITS program deals with it:
+```
+$ fitsheader example.fits
+```
+
+Astropy can read it also:
+```ipython
+In [1]: from astropy.io import fits
+
+In [2]: fits_image_filename = 'example.fits'
+
+In [3]: hdul = fits.open(fits_image_filename)
+
+In [4]: hdul.info()
+Filename: example.fits
+No.    Name         Type      Cards   Dimensions   Format
+  0  PRIMARY     PrimaryHDU      67   ()
+    1  SUBINT      BinTableHDU     78   1R x 17C   [1D, 1D, 1D, 1D, 1D, 1D, 1D, 1E, 1E, 1E, 1E, 1E, 1536E, 1536E, 1536E, 1536E, 153600000B]
+
+In [5]: hdul[0].header
+
+In [6]: len(hdul[0].header['PARSET'])
+Out[6]: 19998
+```
+So astropy also parses longkeys as a single keyword!
+
+TODO: how do other (essential) tools deal with this?

@@ -23,3 +23,6 @@ dadafits: $(SOURCES) $(HEADERS)
 
 fits_dump: fits_dump.c
 	gcc $(FITS_CFLAGS) $(OPTIMIZATION) -o fits_dump fits_dump.c $(FITS_LIBS)
+
+longkey: longkey.c
+	gcc $(FITS_CFLAGS) $(OPTIMIZATION) -o longkey longkey.c $(FITS_LIBS)
