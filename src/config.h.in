@@ -1,0 +1,3 @@
+#define VERSION_MAJOR @dadafits_VERSION_MAJOR@
+#define VERSION_MINOR @dadafits_VERSION_MINOR@
+#define VERSION "@dadafits_VERSION_MAJOR@.@dadafits_VERSION_MINOR@"

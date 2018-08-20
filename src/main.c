@@ -117,6 +117,7 @@
 
 #include "dada_hdu.h"
 #include "ascii_header.h"
+#include "config.h"
 
 #include "dadafits_internal.h"
 int padded_size;
