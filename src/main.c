@@ -136,6 +136,7 @@ float min_frequency = 1492;
 float bandwidth = 300;
 char ra_hms[256];
 char dec_hms[256];
+int scanlen;
 char source_name[256];
 char utc_start[256];
 double mjd_start;
@@ -221,6 +222,10 @@ dada_hdu_t *init_ringbuffer(char *key) {
     header_incomplete = 1;
   }
   if (ascii_header_get(header, "DEC_HMS", "%s", dec_hms) == -1) {
+    LOG("ERROR. DEC not set in dada buffer\n");
+    header_incomplete = 1;
+  }
+  if (ascii_header_get(header, "SCANLEN", "%i", &scanlen) == -1) {
     LOG("ERROR. DEC not set in dada buffer\n");
     header_incomplete = 1;
   }
@@ -449,7 +454,7 @@ int main (int argc, char *argv[]) {
 
   LOG("Output to FITS tabs: %i, channels: %i, polarizations: %i, samples: %i\n", ntabs, nchannels, npols, ntimes);
   dadafits_fits_init(template_dir, template_file, output_directory,
-      ntabs, make_synthesized_beams, min_frequency, bandwidth / nchannels,
+      ntabs, make_synthesized_beams, scanlen, min_frequency, bandwidth / nchannels,
       ra_hms, dec_hms, source_name, utc_start, mjd_start, lst_start);
 
   if (science_mode == 1 || science_mode == 3) {
