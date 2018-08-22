@@ -273,7 +273,7 @@ void dadafits_fits_init (const char *template_dir, const char *template_file, co
     status = 0; if (fits_update_key(fptr, TDOUBLE, "STT_LST", &lst_start, NULL, &status)) fits_error_and_exit(status);
 
     status = 0; if (fits_write_key_longwarn (fptr, &status)) fits_error_and_exit(status);
-    status = 0; if (fits_write_key_longstr(fptr, "PARSET", parset, "BZ2 compressed and then HEX encoded", &status)) fits_error_and_exit(status);
+    status = 0; if (fits_write_key_longstr(fptr, "PARSET", parset, NULL, &status)) fits_error_and_exit(status);
 
     status = 0; if (fits_write_chksum(fptr, &status))        fits_error_and_exit(status);
     status = 0; if (fits_movabs_hdu(fptr, 2, NULL, &status)) fits_error_and_exit(status);
