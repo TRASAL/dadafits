@@ -177,6 +177,7 @@ void write_fits(const int tab, const int channels, const int pols, const long ro
  * @param {int} ntabs               Number of beams
  * @param {int} mode                0: one file per tab, 1: one file per selected synthesized beam
  * @param {float} scanlen           requested observation length in seconds
+ * @param {float} center_frequency  Center frequency of observation
  * @param {float } min_frequency    Center of lowest frequency band of observation
  * @param {float } channelwidth     Width per channel, after optional downsampling
  * @param {char *} ra_hms           Right ascension
@@ -189,7 +190,7 @@ void write_fits(const int tab, const int channels, const int pols, const long ro
  *                                  using fe. in python parset = parset.encode('bz2').encode('hex')
  */
 void dadafits_fits_init (const char *template_dir, const char *template_file, const char *output_directory,
-    const int ntabs, const int mode, float scanlen, const float min_frequency, const float channelwidth, char *ra_hms, char *dec_hms,
+    const int ntabs, const int mode, float scanlen, float center_frequency, const float min_frequency, const float channelwidth, char *ra_hms, char *dec_hms,
     char *source_name, const char *utc_start, const double mjd_start, double lst_start, char *parset) {
   char utc_start_fixed[256];
   int status;
@@ -265,6 +266,7 @@ void dadafits_fits_init (const char *template_dir, const char *template_file, co
     status = 0; if (fits_update_key(fptr, TSTRING, "RA", ra_hms, NULL, &status)) fits_error_and_exit(status);
     status = 0; if (fits_update_key(fptr, TSTRING, "DEC", dec_hms, NULL, &status)) fits_error_and_exit(status);
     status = 0; if (fits_update_key(fptr, TFLOAT, "SCANLEN", &scanlen, NULL, &status)) fits_error_and_exit(status);
+    status = 0; if (fits_update_key(fptr, TFLOAT, "OBSFREQ", &center_frequency, NULL, &status)) fits_error_and_exit(status);
     status = 0; if (fits_update_key(fptr, TSTRING, "SRC_NAME", source_name, NULL, &status)) fits_error_and_exit(status);
     status = 0; if (fits_update_key(fptr, TSTRING, "DATE-OBS", utc_start_fixed, NULL, &status)) fits_error_and_exit(status);
     status = 0; if (fits_update_key(fptr, TULONG, "STT_IMJD", &stt_imjd, NULL, &status)) fits_error_and_exit(status);
