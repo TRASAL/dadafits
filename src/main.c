@@ -136,7 +136,7 @@ float min_frequency = 1492;
 float bandwidth = 300;
 char ra_hms[256];
 char dec_hms[256];
-int scanlen;
+float scanlen;
 char source_name[256];
 char utc_start[256];
 double mjd_start;
@@ -225,7 +225,7 @@ dada_hdu_t *init_ringbuffer(char *key) {
     LOG("ERROR. DEC not set in dada buffer\n");
     header_incomplete = 1;
   }
-  if (ascii_header_get(header, "SCANLEN", "%i", &scanlen) == -1) {
+  if (ascii_header_get(header, "SCANLEN", "%f", &scanlen) == -1) {
     LOG("ERROR. DEC not set in dada buffer\n");
     header_incomplete = 1;
   }
