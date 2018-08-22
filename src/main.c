@@ -402,7 +402,7 @@ int main (int argc, char *argv[]) {
       // adjust min_frequency for downsampling:
       // before |  x  |     |    |    |
       // after  |  x        X         | small 'x' should be large 'X' : add 1.5 of the original channels
-      min_frequency = min_frequency + (1.5 * bandwidth / NCHANNELS);
+      min_frequency = min_frequency + (1.5 * bandwidth / ((float) NCHANNELS));
 
       if (make_synthesized_beams) {
         LOG("Cannot write synthesized beams for compressed I+TAB\n");
@@ -425,7 +425,7 @@ int main (int argc, char *argv[]) {
       // adjust min_frequency for downsampling:
       // before |  x  |     |    |    |
       // after  |  x        X         | small 'x' should be large 'X' : add 1.5 of the original channels
-      min_frequency = min_frequency + (1.5 * bandwidth / NCHANNELS);
+      min_frequency = min_frequency + (1.5 * bandwidth / ((float) NCHANNELS));
 
       if (make_synthesized_beams) {
         LOG("Cannot write synthesized beams for compressed I+IAB\n");
