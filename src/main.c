@@ -132,7 +132,7 @@ const char *template_case34mode02 = "sc34_1bit_I_reduced.txt";
 const char *template_case4mode13 = "sc4_IQUV.txt";
 
 // Variables read from ring buffer header
-float min_frequency = 1492;
+float min_frequency;
 float bandwidth = 300;
 char ra_hms[256];
 char dec_hms[256];
@@ -398,6 +398,12 @@ int main (int argc, char *argv[]) {
       nchannels = NCHANNELS_LOW;
       ntabs = 12;
       npols = 1;
+
+      // adjust min_frequency for downsampling:
+      // before |  x  |     |    |    |
+      // after  |  x        X         | small 'x' should be large 'X' : add 1.5 of the original channels
+      min_frequency = min_frequency + (1.5 * bandwidth / NCHANNELS);
+
       if (make_synthesized_beams) {
         LOG("Cannot write synthesized beams for compressed I+TAB\n");
         exit(EXIT_FAILURE);
@@ -415,6 +421,12 @@ int main (int argc, char *argv[]) {
       nchannels = NCHANNELS_LOW;
       ntabs = 1;
       npols = 1;
+
+      // adjust min_frequency for downsampling:
+      // before |  x  |     |    |    |
+      // after  |  x        X         | small 'x' should be large 'X' : add 1.5 of the original channels
+      min_frequency = min_frequency + (1.5 * bandwidth / NCHANNELS);
+
       if (make_synthesized_beams) {
         LOG("Cannot write synthesized beams for compressed I+IAB\n");
         exit(EXIT_FAILURE);
@@ -464,7 +476,7 @@ int main (int argc, char *argv[]) {
 
   LOG("Output to FITS tabs: %i, channels: %i, polarizations: %i, samples: %i\n", ntabs, nchannels, npols, ntimes);
   dadafits_fits_init(template_dir, template_file, output_directory,
-      ntabs, make_synthesized_beams, scanlen, center_frequency, min_frequency, bandwidth / nchannels,
+      ntabs, make_synthesized_beams, scanlen, center_frequency, bandwidth, min_frequency, bandwidth / nchannels,
       ra_hms, dec_hms, source_name, utc_start, mjd_start, lst_start, parset);
 
   if (science_mode == 1 || science_mode == 3) {
