@@ -55,7 +55,7 @@ extern void parse_synthesized_beam_selection (char *selection);
 // from fits_io.c
 extern void dadafits_fits_init (const char *template_dir, const char *template_file, const char *output_directory,
     const int ntabs, const int mode, float scanlen, const float min_frequency, const float channelwidth, char *ra_hms, char *dec_hms,
-    char *source_name, const char *utc_start, const double mjd_start, double lst_start);
+    char *source_name, const char *utc_start, const double mjd_start, double lst_start, char *parset);
 extern void write_fits(const int tab, const int channels, const int pols, const long rowid, const int rowlength, unsigned char *data, const float telaz, const float telza);
 extern void close_fits();
 extern void fits_error_and_exit(int status); // needed for trapping C-c

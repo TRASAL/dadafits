@@ -185,10 +185,12 @@ void write_fits(const int tab, const int channels, const int pols, const long ro
  * @param (char *) utc_start        Timestamp of start of the observation (UTC), program will silently apply correct field separators YYYY-MM-DDThh:mm:ss
  * @param (double) mjd_start        Start time of the observation in days
  * @param (double) lst_start        Local siderial time in degrees
+ * @param {char *} parset           Pointer to a NULL terminated parset string (note: this will contain illegal characters, fix that upstream
+ *                                  using fe. in python parset = parset.encode('bz2').encode('hex')
  */
 void dadafits_fits_init (const char *template_dir, const char *template_file, const char *output_directory,
     const int ntabs, const int mode, float scanlen, const float min_frequency, const float channelwidth, char *ra_hms, char *dec_hms,
-    char *source_name, const char *utc_start, const double mjd_start, double lst_start) {
+    char *source_name, const char *utc_start, const double mjd_start, double lst_start, char *parset) {
   char utc_start_fixed[256];
   int status;
   float version;
@@ -269,6 +271,9 @@ void dadafits_fits_init (const char *template_dir, const char *template_file, co
     status = 0; if (fits_update_key(fptr, TINT, "STT_SMJD", &stt_smjd, NULL, &status)) fits_error_and_exit(status);
     status = 0; if (fits_update_key(fptr, TDOUBLE, "STT_OFFS", &stt_offs, NULL, &status)) fits_error_and_exit(status);
     status = 0; if (fits_update_key(fptr, TDOUBLE, "STT_LST", &lst_start, NULL, &status)) fits_error_and_exit(status);
+
+    status = 0; if (fits_write_key_longwarn (fptr, &status)) fits_error_and_exit(status);
+    status = 0; if (fits_write_key_longstr(fptr, "PARSET", parset, "BZ2 compressed and then HEX encoded", &status)) fits_error_and_exit(status);
 
     status = 0; if (fits_write_chksum(fptr, &status))        fits_error_and_exit(status);
     status = 0; if (fits_movabs_hdu(fptr, 2, NULL, &status)) fits_error_and_exit(status);
