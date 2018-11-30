@@ -60,9 +60,9 @@
  *          template: sc34_1bit_I_reduced.txt
  *
  *          A ringbuffer page is interpreted as an array of Stokes I:
- *          [NTABS, NCHANNELS, padded_size] = [12, 1536, > 25000]
+ *          [NTABS, NCHANNELS, padded_size] = [12, 1536, > 12500]
  *
- *          The code reduces (by summation) from 25000 to 500 timesteps
+ *          The code reduces (by summation) from 12500 to 500 timesteps
  *          and from 1536 to 384 channels.
  *          Time dimension padding is required by other programes (GPU pipeline)
  *          that connects to the same ringbuffer.
@@ -85,9 +85,9 @@
  *          template: sc34_1bit_I_reduced.txt
  *
  *          A ringbuffer page is interpreted as an array of Stokes I:
- *          [NTABS, NCHANNELS, padded_size] = [1, 1536, > 25000]
+ *          [NTABS, NCHANNELS, padded_size] = [1, 1536, > 12500]
  *
- *          The code reduces (by summation) from 25000 to 500 timesteps
+ *          The code reduces (by summation) from 12500 to 500 timesteps
  *          and from 1536 to 384 channels.
  *          Time dimension padding is required by other programes (GPU pipeline)
  *          that connects to the same ringbuffer.
@@ -457,8 +457,8 @@ int main (int argc, char *argv[]) {
       break;
     case 4:
       sequence_length = 50;
-      if (padded_size < 25000) {
-        LOG("Error: padded_size too small, should be at least 25000 for science case 4\n");
+      if (padded_size < 12500) {
+        LOG("Error: padded_size too small, should be at least 12500 for science case 4\n");
         exit(EXIT_FAILURE);
       }
       if (! template_file) {

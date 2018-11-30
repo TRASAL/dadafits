@@ -27,8 +27,8 @@ void pack_sc34(unsigned int downsampled[NCHANNELS_LOW * NTIMES_LOW], unsigned ch
     temp1 = &downsampled[dc * NTIMES_LOW];
 
     // Sum:
-    // total sum is over 25000 samples times 4 frequencies is 100,000 samples (50,000 for sc3)
-    // maxium value is 100000 * 255 = 5,500,000
+    // total sum is over 12500 samples times 4 frequencies is 50,000 samples (50,000 for sc3)
+    // maxium value is 50000 * 255 = 2,750,000
     // an unsigned int should hold 4,294,967,295, so no overflow here
     //
     // Sos:
@@ -119,7 +119,7 @@ void deinterleave (const unsigned char *page, const int ntabs, const int sequenc
   //   c0, c1, c2, c3 = curr_channel + 0, 1, 2, 3
   //
   // Transposed buffer will contain:
-  // (TAB,NBIN,NCHAN,NPOL,NSBLK) = (NTABS,1,1536,4,12500) or (NTABS,1,1536,4,25000); sc3 or sc4
+  // (TAB,NBIN,NCHAN,NPOL,NSBLK) = (NTABS,1,1536,4,12500) or (NTABS,1,1536,4,12500); sc3 or sc4
 
   // Tranpose by linearly processing original packets from the page
   const unsigned char *packet = page;
