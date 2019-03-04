@@ -411,7 +411,7 @@ int main (int argc, char *argv[]) {
       template_file = template_case34mode02;
       break;
     case 1: // IQUV + TAB to deinterleave
-      ntimes = science_case == 3 ? 12500 : 25000;
+      ntimes = 12500;
       nchannels = NCHANNELS;
       ntabs = 12;
       npols = 4;
@@ -434,7 +434,7 @@ int main (int argc, char *argv[]) {
       template_file = template_case34mode02;
       break;
     case 3: // IQUV + IAB to deinterleave
-      ntimes = science_case == 3 ? 12500 : 25000;
+      ntimes = 12500;
       nchannels = NCHANNELS;
       ntabs = 1;
       npols = 4;
