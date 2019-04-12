@@ -456,7 +456,7 @@ int main (int argc, char *argv[]) {
       }
       break;
     case 4:
-      sequence_length = 50;
+      sequence_length = 25;
       if (padded_size < 12500) {
         LOG("Error: padded_size too small, should be at least 12500 for science case 4\n");
         exit(EXIT_FAILURE);
