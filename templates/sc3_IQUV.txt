@@ -59,7 +59,7 @@ END
 XTENSION = 'BINTABLE'         /  ***** Subintegration data *****
 BITPIX = 8                    / N/A
 NAXIS = 2                     / 2-dimensional binary table
-NAXIS1 = 76833868             / width of table in bytes
+NAXIS1 = 76861516             / width of table in bytes
 NAXIS2 = 0                    / Number of rows in table (NSUBINT)
 PCOUNT = 0                    / size of special data area
 GCOUNT = 1                    / one data group (required keyword)
@@ -78,7 +78,7 @@ ZERO_OFF = 0.                 / Zero offset for SEARCH mode data when using unsi
 SIGNINT = 0                   / Unsigned integers
 NSUBOFFS = 0                  / Subint offset (Contiguous SEARCH-mode files)
 NCHAN = 1536                  / Number of channels/sub-bands in this file
-CHAN_BW = -0.7812500          / [MHz] Channel/sub-band width < 0 --> band is flipped in frequency
+CHAN_BW = -0.1953125          / [MHz] Channel/sub-band width < 0 --> band is flipped in frequency
 NCHNOFFS = 0                  / Channel/sub-band offset for split files
 NSBLK = 12500                 / Samples/row (SEARCH mode, else 1)
 EXTNAME = 'SUBINT '           / name of this binary table extension

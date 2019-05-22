@@ -14,9 +14,9 @@ extern FILE *runlog;
 #define SC3_NTIMES 12500
 #define SC3_DOWNSAMPLE_TIME 25
 
-// 40 microsecond -> 2 milisecond
-#define SC4_NTIMES 25000
-#define SC4_DOWNSAMPLE_TIME 50
+// 80 microsecond -> 2 milisecond
+#define SC4_NTIMES 12500
+#define SC4_DOWNSAMPLE_TIME 25
 
 // the same for both science case 3 and 4
 #define NTIMES_LOW 500
