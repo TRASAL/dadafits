@@ -39,12 +39,18 @@ void fits_error_and_exit(int status) {
  */
 void close_fits() {
   int beam, status;
+  unsigned long numrows;
 
   for (beam=0; beam<NSYNS_MAX; beam++) {
     fitsfile *fptr = output[beam];
-    if (output[beam]) {
+
+    if (fptr) {
+      // correctly set the NAXIS2 keyword
+      numrows = fptr->Fptr->numrows;
+      fits_update_key(fptr, TULONG, "NAXIS2", &numrows, NULL, &status);
+
       // ignore errors on closing files; cfitsio 3.37 reports junk error codes
-      fits_close_file(output[beam], &status);
+      fits_close_file(fptr, &status);
 
       // FUTURE VERSION:
       // if (fits_close_file (output[beam], &status)) {
