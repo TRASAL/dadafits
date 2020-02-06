@@ -39,7 +39,9 @@ void fits_error_and_exit(int status) {
  */
 void close_fits() {
   int beam, status;
-  unsigned long numrows;
+  char comm[1024];
+  long numrows;
+  long long naxis2;
 
   for (beam=0; beam<NSYNS_MAX; beam++) {
     fitsfile *fptr = output[beam];
@@ -47,7 +49,9 @@ void close_fits() {
     if (fptr) {
 
       // correctly set the number of rows; cfitsio 3.41 sets this to 0
-      fptr->Fptr>->numrows = page_count;
+      ffgkyjj(fptr, "NAXIS2", &naxis2, comm, &status);
+      numrows = naxis2;
+      ffrdef(fptr, &status);
 
       // ignore errors on closing files; cfitsio 3.37 reports junk error codes
       fits_close_file(fptr, &status);
