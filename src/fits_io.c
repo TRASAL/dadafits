@@ -45,9 +45,9 @@ void close_fits() {
     fitsfile *fptr = output[beam];
 
     if (fptr) {
-      // correctly set the NAXIS2 keyword
-      numrows = page_count; // TODO: we could be off-by-one here
-      fits_update_key(fptr, TULONG, "NAXIS2", &numrows, NULL, &status);
+
+      // correctly set the number of rows; cfitsio 3.41 sets this to 0
+      fptr->Fptr>->numrows = page_count;
 
       // ignore errors on closing files; cfitsio 3.37 reports junk error codes
       fits_close_file(fptr, &status);
