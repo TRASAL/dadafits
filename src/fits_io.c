@@ -48,12 +48,9 @@ void close_fits() {
 
     if (fptr) {
 
-      // correctly set the number of rows; cfitsio 3.41 sets this to 0
-      ffgkyjj(fptr, "NAXIS2", &naxis2, comm, &status);
-      numrows = naxis2;
-      ffrdef(fptr, &status);
-
       // ignore errors on closing files; cfitsio 3.37 reports junk error codes
+      // however, do reset the error state, otherwise fitsio will crash
+      status = 0;
       fits_close_file(fptr, &status);
 
       // FUTURE VERSION:
@@ -116,7 +113,7 @@ void write_fits(const int tab, const int channels, const int pols, const long ro
   // }
 
   double offs_sub = (double) rowid * 1.024; // OFFS_SUB is in seconds since start of run, but may not be zero
-  LOG("offs_sub: %d\n", offs_sub);
+  LOG("offs_sub: %lf\n", offs_sub);
 
   if (col_offs_sub >= 0) {
     status = 0;
