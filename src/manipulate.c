@@ -58,7 +58,8 @@ void pack_sc34(unsigned int downsampled[NCHANNELS_LOW * NTIMES_LOW], unsigned ch
 
     temp1 = &downsampled[dc * NTIMES_LOW];
     for (dt=0; dt < NTIMES_LOW; dt++) {
-      *temp1++ = *temp1 > cutoff ? 1 : 0;
+      *temp1 = *temp1 > cutoff ? 1 : 0;
+      temp1++;
     }
   }
 
