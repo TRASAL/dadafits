@@ -17,8 +17,8 @@ int col_offset = 15;
 int col_scale = 16;
 int col_weights = 14;
 int col_offs_sub = 2;
-int col_telaz = 12;
-int col_telza = 13;
+int col_telaz = 11;
+int col_telza = 12;
 
 /**
  * pretty print the fits error to the log, and close down cleanly
@@ -38,16 +38,23 @@ void fits_error_and_exit(int status) {
  * Close all opened fits files
  */
 void close_fits() {
-  int tab, status;
+  int beam, status;
+  char comm[1024];
+  long numrows;
+  long long naxis2;
 
-  LOG("Closing files\n");
-  for (tab=0; tab<NTABS_MAX; tab++) {
-    if (output[tab]) {
+  for (beam=0; beam<NSYNS_MAX; beam++) {
+    fitsfile *fptr = output[beam];
+
+    if (fptr) {
+
       // ignore errors on closing files; cfitsio 3.37 reports junk error codes
-      fits_close_file(output[tab], &status);
+      // however, do reset the error state, otherwise fitsio will crash
+      status = 0;
+      fits_close_file(fptr, &status);
 
       // FUTURE VERSION:
-      // if (fits_close_file (output[tab], &status)) {
+      // if (fits_close_file (output[beam], &status)) {
       //   if (runlog) fits_report_error(runlog, status);
       //   fits_report_error(stdout, status);
       // }
@@ -106,6 +113,7 @@ void write_fits(const int tab, const int channels, const int pols, const long ro
   // }
 
   double offs_sub = (double) rowid * 1.024; // OFFS_SUB is in seconds since start of run, but may not be zero
+  LOG("offs_sub: %lf\n", offs_sub);
 
   if (col_offs_sub >= 0) {
     status = 0;
@@ -124,13 +132,6 @@ void write_fits(const int tab, const int channels, const int pols, const long ro
   if (col_telza >= 0) {
     status = 0;
     if (fits_write_col(fptr, TFLOAT, col_telza, rowid, 1, 1, &telza, &status)) {
-      fits_error_and_exit(status);
-    }
-  }
-
-  if (col_offs_sub >= 0) {
-    status = 0;
-    if (fits_write_col(fptr, TDOUBLE, col_offs_sub, rowid, 1, 1, &offs_sub, &status)) {
       fits_error_and_exit(status);
     }
   }

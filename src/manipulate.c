@@ -58,7 +58,8 @@ void pack_sc34(unsigned int downsampled[NCHANNELS_LOW * NTIMES_LOW], unsigned ch
 
     temp1 = &downsampled[dc * NTIMES_LOW];
     for (dt=0; dt < NTIMES_LOW; dt++) {
-      *temp1++ = *temp1 > cutoff ? 1 : 0;
+      *temp1 = *temp1 > cutoff ? 1 : 0;
+      temp1++;
     }
   }
 
@@ -110,7 +111,7 @@ void deinterleave (const unsigned char *page, const int ntabs, const int sequenc
   //
   // tab             : ranges from 0 to (1 or 12) mode TAB / IAB
   // channel_offset  : ranges from 0 to NCHANNELS/4 (=1536/4=384)
-  // sequence_number : ranges from 0 to 25 or 50 (sc3 or sc4)
+  // sequence_number : ranges from 0 to 25 or 25 (sc3 or sc4)
   //
   // the 8000 bytes are the original packets, containing stokes IQUV:
   //   [t0 .. t499][c0 .. c3][the 4 components IQUV]

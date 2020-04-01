@@ -155,6 +155,9 @@ unsigned char packed[NCHANNELS_LOW * NTIMES_LOW / 8];
 unsigned char *transposed = NULL; // Stokes IQUV buffer of approx 2 GB, allocated only when necessary
 unsigned char *synthesized = NULL; // Stokes IQUV for a single synthesized beam
 
+// Runtime counters
+long page_count = 0;
+
 /**
  * Open a connection to the ringbuffer
  *
@@ -498,7 +501,6 @@ int main (int argc, char *argv[]) {
   }
 
   int quit = 0;
-  long page_count = 0;
   char *page = NULL;
 
   // Trap Ctr-C to properly close fits files on exit

@@ -56,8 +56,6 @@ int read_synthesized_beam_table(char *fname) {
 
       synthesized_beam_table[syn_index][subband_index] = atoi(key);
 
-      // Convert indexing from [-NTABS_MAX/2, NTABS_MAX/2  - 1] := [-6,5] to [0,NTABS_MAX] := [0,11]
-      synthesized_beam_table[syn_index][subband_index] += NTABS_MAX/2;
       if (synthesized_beam_table[syn_index][subband_index] < 0 || synthesized_beam_table[syn_index][subband_index] >= NTABS_MAX) {
         LOG("Error: illegal TAB entry '%s' at %i for synthesized beam %i\n", key, subband_index, syn_index);
         exit(EXIT_FAILURE);
