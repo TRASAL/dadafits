@@ -479,8 +479,8 @@ int main (int argc, char *argv[]) {
 
   LOG("Output to FITS tabs: %i, channels: %i, polarizations: %i, samples: %i\n", ntabs, nchannels, npols, ntimes);
   dadafits_fits_init(template_dir, template_file, output_directory,
-      ntabs, make_synthesized_beams, scanlen, center_frequency, bandwidth, min_frequency, bandwidth / nchannels,
-      ra_hms, dec_hms, source_name, utc_start, mjd_start, lst_start, parset);
+      ntabs, make_synthesized_beams, scanlen, center_frequency, bandwidth, min_frequency, nchannels, 
+      bandwidth / nchannels, ra_hms, dec_hms, source_name, utc_start, mjd_start, lst_start, parset);
 
   if (science_mode == 1 || science_mode == 3) {
     LOG("Allocating Stokes IQUV transpose buffer (%i,%i,%i,%i)\n", ntabs, ntimes, NPOLS, NCHANNELS);

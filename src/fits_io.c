@@ -180,6 +180,7 @@ void write_fits(const int tab, const int channels, const int pols, const long ro
  * @param {float} center_frequency  Center frequency of observation
  * @param {float} bandwidth         Bandwidth of observation
  * @param {float } min_frequency    Center of lowest frequency band of observation
+ * @param {int   } channels         Number of channels
  * @param {float } channelwidth     Width per channel, after optional downsampling
  * @param {char *} ra_hms           Right ascension
  * @param {char *} dec_hms          Declination
@@ -191,7 +192,7 @@ void write_fits(const int tab, const int channels, const int pols, const long ro
  *                                  using fe. in python parset = parset.encode('bz2').encode('hex')
  */
 void dadafits_fits_init (const char *template_dir, const char *template_file, const char *output_directory,
-    const int ntabs, const int mode, float scanlen, float center_frequency, float bandwidth, const float min_frequency, const float channelwidth, char *ra_hms, char *dec_hms,
+    const int ntabs, const int mode, float scanlen, float center_frequency, float bandwidth, const float min_frequency, const int nchannels, const float channelwidth, char *ra_hms, char *dec_hms,
     char *source_name, const char *utc_start, const double mjd_start, double lst_start, char *parset) {
   char utc_start_fixed[256];
   int status;
@@ -292,9 +293,9 @@ void dadafits_fits_init (const char *template_dir, const char *template_file, co
     fits_scale[i] = 1.0;
   }
 
-  for (i=0; i<NCHANNELS; i++) {
+  for (i=0; i<nchannels; i++) {
     fits_weights[i] = 1.0;
     // data should be ordered from high to low frequency
-    fits_freqs[NCHANNELS - 1 - i] = min_frequency + i * channelwidth;
+    fits_freqs[nchannels - 1 - i] = min_frequency + i * channelwidth;
   }
 }
