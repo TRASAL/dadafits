@@ -61,7 +61,7 @@ extern void close_fits();
 extern void fits_error_and_exit(int status); // needed for trapping C-c
 
 // from manipulate.c
-extern void deinterleave (const unsigned char *page, const int ntabs, const int sequence_length, unsigned char *transposed);
+extern void deinterleave (const unsigned char *page, const int ntimes, const int ntabs, const int sequence_length, unsigned char *transposed);
 extern void pack_sc34(unsigned int downsampled[NCHANNELS_LOW * NTIMES_LOW], unsigned char packed[NCHANNELS_LOW * NTIMES_LOW/8]);
 
 // from main.c

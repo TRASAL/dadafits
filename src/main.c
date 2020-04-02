@@ -483,7 +483,7 @@ int main (int argc, char *argv[]) {
       ra_hms, dec_hms, source_name, utc_start, mjd_start, lst_start, parset);
 
   if (science_mode == 1 || science_mode == 3) {
-    LOG("Allocating Stokes IQUV transpose buffer (%i,%i,%i,%i)\n", ntabs, NCHANNELS, NPOLS, ntimes);
+    LOG("Allocating Stokes IQUV transpose buffer (%i,%i,%i,%i)\n", ntabs, ntimes, NPOLS, NCHANNELS);
     transposed = malloc(ntabs * NCHANNELS * NPOLS * ntimes * sizeof(char));
     if (transposed == NULL) {
       LOG("Could not allocate stokes IQUV transpose matrix\n");
@@ -551,7 +551,7 @@ int main (int argc, char *argv[]) {
         case 1:
         case 3:
           // transpose data from page to transposed buffer
-          deinterleave(page, ntabs, sequence_length, transposed);
+          deinterleave(page, ntimes, ntabs, sequence_length, transposed);
 
           if (make_synthesized_beams) {
             // synthesize beams

@@ -101,11 +101,12 @@ void pack_sc34(unsigned int downsampled[NCHANNELS_LOW * NTIMES_LOW], unsigned ch
  *   2. offline: dada_dbdisk -> ringbuffer -> dadafits
  *
  *  @param {const uchar[]} page                 Ringbuffer page with interleaved data
+ *  @param {int}           ntimes               Number of time samples per page
  *  @param {int}           ntabs                Number of tabs
  *  @param {int}           sequence_length      Number of packets per
  *  @param {uchar[]}       transposed           Output buffer to hold deinterleaved data. Size: ntabs*NCHANNELS*NPOLS*ntimes
  */
-void deinterleave (const unsigned char *page, const int ntabs, const int sequence_length, unsigned char *transposed) {
+void deinterleave (const unsigned char *page, const int ntimes, const int ntabs, const int sequence_length, unsigned char *transposed) {
   // ring buffer page contains matrix:
   //   [tab][channel_offset][sequence_number][8000]
   //
@@ -120,7 +121,11 @@ void deinterleave (const unsigned char *page, const int ntabs, const int sequenc
   //   c0, c1, c2, c3 = curr_channel + 0, 1, 2, 3
   //
   // Transposed buffer will contain:
-  // (TAB,NBIN,NCHAN,NPOL,NSBLK) = (NTABS,1,1536,4,12500) or (NTABS,1,1536,4,12500); sc3 or sc4
+  // (NTAB,NTIME,NPOL,NCHAN) = (NTABS,12500,4,1536)
+  // NOTE: data must be written in time-frequency order even though fits header
+  // uses (NBIN,NFREQ,NPOL,NTIME) notation (i.e. frequency-time order)
+  // additionally, frequency channels must be ordered from high to low,
+  // as indicated by the negative bandwidth in the header
 
   // Tranpose by linearly processing original packets from the page
   const unsigned char *packet = page;
@@ -138,10 +143,10 @@ void deinterleave (const unsigned char *page, const int ntabs, const int sequenc
           for (cn = 0; cn < 4; cn++) { // 4 channels per packet
             for (pn = 0; pn < NPOLS; pn++) {
               transposed[
-                ((tab * NCHANNELS +
-                  cn + channel_offset) * NPOLS +
-                 pn) * sequence_length * 500 +
-                  tn + sequence_number * 500
+              (tab * ntimes + 
+               sequence_number * 500 + tn) * NPOLS * NCHANNELS + 
+              pn * NCHANNELS + 
+              NCHANNELS - 1 - (channel_offset + cn)
               ] = *packet++;
             }
           }
