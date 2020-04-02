@@ -112,8 +112,7 @@ void write_fits(const int tab, const int channels, const int pols, const long ro
   //   fits_error_and_exit(status);
   // }
 
-  double offs_sub = (double) rowid * 1.024; // OFFS_SUB is in seconds since start of run, but may not be zero
-  LOG("offs_sub: %lf\n", offs_sub);
+  double offs_sub = (double) rowid * 1.024 - 0.512; // OFFS_SUB is subint centre in seconds since start of run, but may not be zero
 
   if (col_offs_sub >= 0) {
     status = 0;
