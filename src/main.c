@@ -592,7 +592,7 @@ int main (int argc, char *argv[]) {
               }
             }
           } else {
-            LOG("TABs %i\n", ntabs);
+            LOG("Page: %i\n", page_count);
             // do not synthesize, but use TABs
             for (tab = 0; tab < ntabs; tab++) {
               // write data from transposed buffer, also uses scale, weights, and offset arrays (but set to neutral values)
