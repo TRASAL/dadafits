@@ -126,6 +126,7 @@ void deinterleave (const unsigned char *page, const int ntimes, const int ntabs,
   // uses (NBIN,NFREQ,NPOL,NTIME) notation (i.e. frequency-time order)
   // additionally, frequency channels must be ordered from high to low,
   // as indicated by the negative bandwidth in the header
+  // lastly, polarisations must be writen as IQUV, but pages contain VUQI
 
   // Tranpose by linearly processing original packets from the page
   const unsigned char *packet = page;
@@ -145,7 +146,7 @@ void deinterleave (const unsigned char *page, const int ntimes, const int ntabs,
               transposed[
               (tab * ntimes + 
                sequence_number * 500 + tn) * NPOLS * NCHANNELS + 
-              pn * NCHANNELS + 
+              (NPOLS - 1 - pn) * NCHANNELS +
               NCHANNELS - 1 - (channel_offset + cn)
               ] = *packet++;
             }
