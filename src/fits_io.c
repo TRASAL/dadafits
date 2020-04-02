@@ -294,6 +294,7 @@ void dadafits_fits_init (const char *template_dir, const char *template_file, co
 
   for (i=0; i<NCHANNELS; i++) {
     fits_weights[i] = 1.0;
-    fits_freqs[i] = min_frequency + i * channelwidth;
+    // data should be ordered from high to low frequency
+    fits_freqs[NCHANNELS - 1 - i] = min_frequency + i * channelwidth;
   }
 }
