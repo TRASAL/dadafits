@@ -51,8 +51,9 @@ void pack_sc34(unsigned int downsampled[NCHANNELS_LOW * NTIMES_LOW], unsigned ch
     // Second pass: convert to 1 bit
     // 0: below average, represented by nummerical value avg-std
     // 1: above average, represented by nummerical value avg+std
-    fits_offset[dc] = avg - std;
-    fits_scale[dc]  = 2.0 * std;
+    // Take care of high-to-low frequency order in packed array
+    fits_offset[NCHANNELS_LOW-dc] = avg - std;
+    fits_scale[NCHANNELS_LOW-dc]  = 2.0 * std;
 
     unsigned int cutoff = avg;
 
@@ -63,20 +64,34 @@ void pack_sc34(unsigned int downsampled[NCHANNELS_LOW * NTIMES_LOW], unsigned ch
     }
   }
 
-  // Third pass: pack bits in bytes
-  temp1 = downsampled;
-  temp2 = packed;
-  int count;
-  for (count=0; count < NCHANNELS_LOW * NTIMES_LOW / 8; count++) {
-    *temp2  = *temp1++ ? 1 << 7 : 0;
-    *temp2 += *temp1++ ? 1 << 6 : 0;
-    *temp2 += *temp1++ ? 1 << 5 : 0;
-    *temp2 += *temp1++ ? 1 << 4 : 0;
-    *temp2 += *temp1++ ? 1 << 3 : 0;
-    *temp2 += *temp1++ ? 1 << 2 : 0;
-    *temp2 += *temp1++ ? 1 << 1 : 0;
-    *temp2 += *temp1++ ? 1      : 0;
-    temp2++;
+  // Third pass: pack bits in bytes, transpose to time-frequency order, order frequencies from high to low
+  // packing requires NCHANNELS_LOW is divisible by 8
+  int dt;
+  for (dt=0; dt < NTIMES_LOW; dt++) {
+    for (dc=0; dc < NCHANNELS_LOW; dc+=8) {
+      // position in (transposed) packed array 
+      temp2 = &packed[(dt * NCHANNELS_LOW + (dc)) / 8];
+      // start point in downsampled array
+      // this array is transposed and has frequencies high-to-low
+      temp1 = &downsampled[(NCHANNELS_LOW - 1 - dc) * NTIMES_LOW + dt];
+      // do the packing; jump to next channel in input array after each step
+      // LSB is lowest channel to comply with high->low frequency order in output
+      *temp2  = *temp1 ? 1     : 0;
+      temp1 += NTIMES_LOW;
+      *temp2 += *temp1 ? 1 << 1: 0;
+      temp1 += NTIMES_LOW;
+      *temp2 += *temp1 ? 1 << 2: 0;
+      temp1 += NTIMES_LOW;
+      *temp2 += *temp1 ? 1 << 3: 0;
+      temp1 += NTIMES_LOW;
+      *temp2 += *temp1 ? 1 << 4: 0;
+      temp1 += NTIMES_LOW;
+      *temp2 += *temp1 ? 1 << 5: 0;
+      temp1 += NTIMES_LOW;
+      *temp2 += *temp1 ? 1 << 6: 0;
+      temp1 += NTIMES_LOW;
+      *temp2 += *temp1 ? 1 << 7: 0;
+    }
   }
 
   // DEBUG NaNs:

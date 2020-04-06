@@ -550,14 +550,17 @@ int main (int argc, char *argv[]) {
         // stokesIQUV data to (optionally synthesize) and write
         case 1:
         case 3:
+          LOG("Page: %i\n", page_count);
           // transpose data from page to transposed buffer
           deinterleave(page, ntimes, ntabs, sequence_length, transposed);
 
           if (make_synthesized_beams) {
+            // TODO: take care of time-frequency transpose
             // synthesize beams
             //
             // Input: transposed buffer   [TABS, CHANNELS, POLS, TIMES]
             // Output: synthesized buffer [CHANNELS, POLS, TIMES]
+            // TODO: actually flip the channel and time axes so time is first
             
             for (sb = 0; sb < synthesized_beam_count; sb++) {
               if (synthesized_beam_selected[sb]) {
@@ -592,7 +595,6 @@ int main (int argc, char *argv[]) {
               }
             }
           } else {
-            LOG("Page: %i\n", page_count);
             // do not synthesize, but use TABs
             for (tab = 0; tab < ntabs; tab++) {
               // write data from transposed buffer, also uses scale, weights, and offset arrays (but set to neutral values)
