@@ -256,9 +256,21 @@ void dadafits_fits_init (const char *template_dir, const char *template_file, co
     }
 
     if (output_directory) {
-      snprintf(fname, 256, "%s/%s%c.fits(%s/%s)", output_directory, prefix, 'A'+t, template_dir, template_file);
+      if (mode == 0) {
+        // one file per TAB, use letters
+        snprintf(fname, 256, "%s/%s%c.fits(%s/%s)", output_directory, prefix, 'A'+t, template_dir, template_file);
+      } else{
+        // one file per SB, use numbers
+        snprintf(fname, 256, "%s/%s%02d.fits(%s/%s)", output_directory, prefix, t, template_dir, template_file);
+      }
     } else {
-      snprintf(fname, 256, "%s%c.fits(%s/%s)", prefix, 'A'+t, template_dir, template_file);
+      if (mode == 0) {
+        // one file per TAB, use letters
+        snprintf(fname, 256, "%s%c.fits(%s/%s)", prefix, 'A'+t, template_dir, template_file);
+      } else {
+        // one file per SB, use numbers
+        snprintf(fname, 256, "%s%02d.fits(%s/%s)", prefix, t, template_dir, template_file);
+      }
     }
     LOG("Writing %s %02i to file %s\n", prefix, t, fname);
 
