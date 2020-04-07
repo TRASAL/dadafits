@@ -492,7 +492,7 @@ int main (int argc, char *argv[]) {
   }
 
   if (make_synthesized_beams) {
-    LOG("Allocating Stokes IQUV synthesized beam buffer (1,%i,%i,%i)\n", NCHANNELS, NPOLS, ntimes);
+    LOG("Allocating Stokes IQUV synthesized beam buffer (1,%i,%i,%i)\n", ntimes, NPOLS, NCHANNELS);
     synthesized = malloc(1 * NCHANNELS * NPOLS * ntimes * sizeof(char));
     if (synthesized == NULL) {
       LOG("Could not allocate stokes IQUV synthesized beam buffer\n");
@@ -555,16 +555,16 @@ int main (int argc, char *argv[]) {
           deinterleave(page, ntimes, ntabs, sequence_length, transposed);
 
           if (make_synthesized_beams) {
-            // TODO: take care of time-frequency transpose
             // synthesize beams
             //
-            // Input: transposed buffer   [TABS, CHANNELS, POLS, TIMES]
-            // Output: synthesized buffer [CHANNELS, POLS, TIMES]
-            // TODO: actually flip the channel and time axes so time is first
+            // Input: transposed buffer   [TABS, TIMES, POLS, CHANNELS]
+            // Output: synthesized buffer [TIMES, POLS, CHANNELS]
             
             for (sb = 0; sb < synthesized_beam_count; sb++) {
               if (synthesized_beam_selected[sb]) {
-                int band;
+                int tn; // current time
+                int pn; // current pol
+                int band; // current subband
 
                 // a subband contains 1536/32=48 frequencies from a TAB
                 for (band = 0; band < NSUBBANDS; band++) {
@@ -575,11 +575,22 @@ int main (int argc, char *argv[]) {
                     exit(EXIT_FAILURE);
                   }
 
-                  memcpy(
-                    &synthesized[band * FREQS_PER_SUBBAND * NPOLS * ntimes],
-                    &transposed[(tab * NCHANNELS + band * FREQS_PER_SUBBAND) * NPOLS * ntimes],
-                    FREQS_PER_SUBBAND * NPOLS * ntimes
-                  );
+                  // for each time and polarisation, copy the 48 frequencies of this subband to output 
+                  for (tn = 0; tn < ntimes; tn++) {
+                    for (pn = 0; pn < NPOLS; pn++ ) {
+                      memcpy(
+                        &synthesized[
+                          tn * NPOLS * NCHANNELS + pn * NCHANNELS + 
+                          (NSUBBANDS - 1 - band) * FREQS_PER_SUBBAND
+                        ],
+                        &transposed[
+                          tab * ntimes * NPOLS * NCHANNELS + tn * NPOLS * NCHANNELS +
+                          pn * NCHANNELS + (NSUBBANDS - 1 - band) * FREQS_PER_SUBBAND
+                        ],
+                        FREQS_PER_SUBBAND
+                      );
+                    }
+                  }
                 }
 
                 // write data from synthesized buffer
