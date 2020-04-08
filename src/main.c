@@ -177,7 +177,7 @@ dada_hdu_t *init_ringbuffer(char *key) {
   key_t shmkey;
   sscanf(key, "%x", &shmkey);
   dada_hdu_set_key(hdu, shmkey);
-  LOG("dadafits SHMKEY: %s\n", key);
+  LOG("dadafits SHMKEY: %x\n", key);
 
   // connect
   if (dada_hdu_connect (hdu) < 0) {
