@@ -10,17 +10,17 @@ extern FILE *runlog;
 #define NCHANNELS 1536
 #define NPOLS 4
 
-// 80 microsecond -> 2 milisecond
+// 80 microsecond -> .8 milisecond
 #define SC3_NTIMES 12500
-#define SC3_DOWNSAMPLE_TIME 25
+#define SC3_DOWNSAMPLE_TIME 10
 
-// 80 microsecond -> 2 milisecond
+// 80 microsecond -> .8 milisecond
 #define SC4_NTIMES 12500
-#define SC4_DOWNSAMPLE_TIME 25
+#define SC4_DOWNSAMPLE_TIME 10
 
 // the same for both science case 3 and 4
-#define NTIMES_LOW 500
-#define NCHANNELS_LOW (NCHANNELS / 4)
+#define NTIMES_LOW 1250
+#define NCHANNELS_LOW (NCHANNELS / 2)
 
 // The synthesized beams table
 #define NSYNS_MAX 256
