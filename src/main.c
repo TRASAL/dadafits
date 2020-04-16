@@ -10,7 +10,7 @@
  *          template: sc34_1bit_I_reduced.txt
  *
  *          A ringbuffer page is interpreted as an array of Stokes I:
- *          [NTABS, NCHANNELS, padded_size] = [12, 1536, > 12500]
+ *          [NTABS, NCHANNELS, padded_size] = [9, 1536, > 12500]
  *
  *          The code reduces (by summation) from 12500 to 500 timesteps
  *          and from 1536 to 384 channels.
@@ -23,7 +23,7 @@
  *          A ringbuffer page is interpreted as an interleaved array of Stokes IQUV:
  *          [tab][channel_offset][sequence_number][packet]
  *
- *          tab             := ranges from 0 to NTABS (12)
+ *          tab             := ranges from 0 to NTABS (9)
  *          channel_offset  := ranges from 0 to NCHANNELS/4 (384)
  *          sequence_number := ranges from 0 to 25
  *
@@ -395,11 +395,38 @@ int main (int argc, char *argv[]) {
     make_synthesized_beams = 0;
   }
 
+  switch (science_case) {
+    case 3:
+      ntabs = 9;
+      sequence_length = 25;
+      if (padded_size < 12500) {
+        LOG("Error: padded_size too small, should be at least 12500 for science case 3\n");
+        exit(EXIT_FAILURE);
+      }
+      if (! template_file) {
+        template_file = template_case3mode13;
+      }
+      break;
+    case 4:
+      ntabs = 9;
+      sequence_length = 25;
+      if (padded_size < 12500) {
+        LOG("Error: padded_size too small, should be at least 12500 for science case 4\n");
+        exit(EXIT_FAILURE);
+      }
+      if (! template_file) {
+        template_file = template_case4mode13;
+      }
+      break;
+    default:
+      LOG("Illegal science case %i\n", science_case);
+      exit(EXIT_FAILURE);
+  }
+
   switch (science_mode) {
     case 0: // I + TAB to be compressed and downsampled
       ntimes = NTIMES_LOW;
       nchannels = NCHANNELS_LOW;
-      ntabs = 12;
       npols = 1;
 
       // adjust min_frequency for downsampling:
@@ -416,13 +443,12 @@ int main (int argc, char *argv[]) {
     case 1: // IQUV + TAB to deinterleave
       ntimes = 12500;
       nchannels = NCHANNELS;
-      ntabs = 12;
       npols = 4;
       break;
     case 2: // I + IAB to be compressed and downsampled
       ntimes = NTIMES_LOW;
       nchannels = NCHANNELS_LOW;
-      ntabs = 1;
+      ntabs = 1; // overwrite NTABS to be one
       npols = 1;
 
       // adjust min_frequency for downsampling:
@@ -439,37 +465,11 @@ int main (int argc, char *argv[]) {
     case 3: // IQUV + IAB to deinterleave
       ntimes = 12500;
       nchannels = NCHANNELS;
-      ntabs = 1;
+      ntabs = 1; // overwrite NTABS to be one
       npols = 4;
       break;
     default:
       LOG("Illegal science mode %i\n", science_mode);
-      exit(EXIT_FAILURE);
-  }
-
-  switch (science_case) {
-    case 3:
-      sequence_length = 25;
-      if (padded_size < 12500) {
-        LOG("Error: padded_size too small, should be at least 12500 for science case 3\n");
-        exit(EXIT_FAILURE);
-      }
-      if (! template_file) {
-        template_file = template_case3mode13;
-      }
-      break;
-    case 4:
-      sequence_length = 25;
-      if (padded_size < 12500) {
-        LOG("Error: padded_size too small, should be at least 12500 for science case 4\n");
-        exit(EXIT_FAILURE);
-      }
-      if (! template_file) {
-        template_file = template_case4mode13;
-      }
-      break;
-    default:
-      LOG("Illegal science case %i\n", science_case);
       exit(EXIT_FAILURE);
   }
 
