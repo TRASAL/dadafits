@@ -121,6 +121,22 @@ Building is then done using the Makefile:
   make
 ```
 
+# Synthesized beams
+
+The tied array beams can be combined to form synthesized beams; providing more accurate localisation.
+A synthesized beam is a linear combination (simple sum) of tied array beams.
+
+The synthesized beam table lists per synthesized beam the constituent tied array beams.
+The following rules apply:
+ * allow comments: everything following a '#'  until the next newline is a comment, lines starting with '#' are ignored
+ * any and all white space is ignored and is only relevant for separating the numbers
+ * completely empty lines are ignored
+
+The indexing scheme is as follows:
+ * 0 denotes the central position,
+ * a negative index implies a position left or westward of the center and
+ * a positive index denotes a position right or eastward of the center.
+
 # Contributers
 
 Jisk Attema, Netherlands eScience Center
