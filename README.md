@@ -29,11 +29,14 @@ These modes are for archiving data; the program can be run as part of the realti
 
 The program implements different modes:
 - mode 0: Stokes I + IAB (coherent beams, so only one tied array beam)
-- mode 2: Stokes I + TAB (12 tied array beams)
+- mode 2: Stokes I + TAB (multiple tied array beams)
 
 In these modes data is also:
 * integrated over time to reduce sample rate to 1250 samples per 1.024 seconds
 * summed over frequencies to reduce total number of frequencies to 768
+* compressed to 1 bit
+
+For details see [this section below](#downsampling-and-compression).
 
 ## Science cases
 
@@ -56,8 +59,8 @@ The program implements different modes:
 
 The data input rate is set per science case.
 Supported cases:
-- case 3: 12500 samples per second
-- case 4: 25000 samples per second
+- case 3: 12500 samples per second, 9 beams
+- case 4: 25000 samples per second, 12 beams
 
 # The ringbuffer
 
