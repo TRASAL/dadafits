@@ -14,7 +14,6 @@ See [dadatrigger](https://github.com/AA-ALERT/dadatrigger) for an introduction a
 Command line arguments:
  * *-k* Set the (hexadecimal) key to connect to the ringbuffer.
  * *-l* Absolute path to a logfile (to be overwritten)
- * *-n* Prefix for the fitlerbank output files
  * *-t* Template directory (defaults to the directory **templates** in the current working directory)
  * *-d* Output directory
  * *-S* Synthesized beam table
@@ -64,8 +63,9 @@ Supported cases:
 
 ## Header block
 
-Metadata is read from the PSRdada header block.
-Note that some of the metadata available in the header block is ignored, due to code constraints and optimizations.
+Metadata is read from the PSRdada header block, and copied to the FITS header.
+Note that much of the metadata available in the header block is ignored, due to code constraints and optimizations.
+
 For values that should be present see the table below.
 
 |header key      | type    | units | description | notes |
@@ -77,12 +77,15 @@ For values that should be present see the table below.
 | SCIENCE\_MODE  | int     | 1                   | Mode of operation of ARTS, determines data layout | Either 1,2,3, or 4 |
 | RA\_HMS        | string  | HH:MM:SS.ssss       | Right ascension                                   | maps to RA |
 | DEC\_HMS       | string  |+HH:MM:SS.ssss       | Declination                                       | maps to DEC |
+| SCANLEN        | float   | seconds             | Requested observation length                      | maps to SCANLEN |
+| FREQ           | float   | degrees             | Center frequency                                  | maps to OBSFREQ |
 | SOURCE         | string  | text                | Source name                                       | maps to SRC\_NAME |
 | UTC\_START     | char    | YYYY-MM-DDTHH:MM:SS | Human readable timestamp of the start of the observation. | The program will silently modify the separators to conform to FITS standard. However, whitespace characters as in '2018-04-18 14:40:10' will not work | maps to DATE-OBS |
 | MJD\_START     | double  | days since epoch    | Modified Julian Date                              | maps to STT\_IMJD and STT\_SMJD |
 | LST\_START     | double  | degrees             | Local siderial time                               | maps to STT\_LST |
 | AZ\_START      | float   | degrees             | Azimuth angle of telescope                        | set per row in the SUBINT binary table as TEL\_AZ, assumed constant over the run |
 | ZA\_START      | float   | degrees             | Zenith angle of telescope                         | set per row in the SUBINT binary table as TEL\_ZEN, assumed constant over the run |
+| PARSET         | string  |                     | Parameter file for the observation                | maps to PARSET |
 
 ## Data block
 
@@ -109,6 +112,12 @@ A template is used for the FITS file and is selected based on science case and m
 Templates are searched for in the **template** directory in the current working directory; or its location can be specified as a command line argument.
 
 Data is stored one beam per file.
+
+For TAB the filename is ```tabX.fits```, where X indicates the TAB number. A=0, B=1, etc.
+For synthesized beams the filename is ```synXX.fits```, where XX is the synthesized beam number
+
+
+
 
 # Building
 
