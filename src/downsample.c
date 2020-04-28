@@ -22,26 +22,20 @@ void downsample_sc3(const unsigned char *buffer, const int padded_size, unsigned
   int t; // full time
 
   for (dc=0; dc < NCHANNELS_LOW; dc++) {
-    // pointer to next sample in the four channels
-    unsigned const char *s0 = &buffer[((dc << 2) + 0) * padded_size];
-    unsigned const char *s1 = &buffer[((dc << 2) + 1) * padded_size];
-    unsigned const char *s2 = &buffer[((dc << 2) + 2) * padded_size];
-    unsigned const char *s3 = &buffer[((dc << 2) + 3) * padded_size];
+    // pointer to next sample in the two channels
+    unsigned const char *s0 = &buffer[((dc << 1) + 0) * padded_size];
+    unsigned const char *s1 = &buffer[((dc << 1) + 1) * padded_size];
 
     for (dt=0; dt < NTIMES_LOW; dt++) {
       // partial sums (per channel)
       unsigned int ps0 = 0;
       unsigned int ps1 = 0;
-      unsigned int ps2 = 0;
-      unsigned int ps3 = 0;
 
       for (t=0; t < SC3_DOWNSAMPLE_TIME; t++) {
         ps0 += *s0++;
         ps1 += *s1++;
-        ps2 += *s2++;
-        ps3 += *s3++;
       }
-      *temp1++ = ps0 + ps1 + ps2 + ps3;
+      *temp1++ = ps0 + ps1;
     }
   }
 }
@@ -53,26 +47,20 @@ void downsample_sc4(const unsigned char *buffer, const int padded_size, unsigned
   int t; // full time
 
   for (dc=0; dc < NCHANNELS_LOW; dc++) {
-    // pointer to next sample in the four channels
-    unsigned const char *s0 = &buffer[((dc << 2) + 0) * padded_size];
-    unsigned const char *s1 = &buffer[((dc << 2) + 1) * padded_size];
-    unsigned const char *s2 = &buffer[((dc << 2) + 2) * padded_size];
-    unsigned const char *s3 = &buffer[((dc << 2) + 3) * padded_size];
+    // pointer to next sample in the two channels
+    unsigned const char *s0 = &buffer[((dc << 1) + 0) * padded_size];
+    unsigned const char *s1 = &buffer[((dc << 1) + 1) * padded_size];
 
     for (dt=0; dt < NTIMES_LOW; dt++) {
       // partial sums (per channel)
       unsigned int ps0 = 0;
       unsigned int ps1 = 0;
-      unsigned int ps2 = 0;
-      unsigned int ps3 = 0;
 
       for (t=0; t < SC4_DOWNSAMPLE_TIME; t++) {
         ps0 += *s0++;
         ps1 += *s1++;
-        ps2 += *s2++;
-        ps3 += *s3++;
       }
-      *temp1++ = ps0 + ps1 + ps2 + ps3;
+      *temp1++ = ps0 + ps1;
     }
   }
 }

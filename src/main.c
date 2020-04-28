@@ -10,7 +10,7 @@
  *          template: sc34_1bit_I_reduced.txt
  *
  *          A ringbuffer page is interpreted as an array of Stokes I:
- *          [NTABS, NCHANNELS, padded_size] = [12, 1536, > 12500]
+ *          [NTABS, NCHANNELS, padded_size] = [9, 1536, > 12500]
  *
  *          The code reduces (by summation) from 12500 to 500 timesteps
  *          and from 1536 to 384 channels.
@@ -23,7 +23,7 @@
  *          A ringbuffer page is interpreted as an interleaved array of Stokes IQUV:
  *          [tab][channel_offset][sequence_number][packet]
  *
- *          tab             := ranges from 0 to NTABS (12)
+ *          tab             := ranges from 0 to NTABS (9)
  *          channel_offset  := ranges from 0 to NCHANNELS/4 (384)
  *          sequence_number := ranges from 0 to 25
  *
@@ -395,60 +395,9 @@ int main (int argc, char *argv[]) {
     make_synthesized_beams = 0;
   }
 
-  switch (science_mode) {
-    case 0: // I + TAB to be compressed and downsampled
-      ntimes = NTIMES_LOW;
-      nchannels = NCHANNELS_LOW;
-      ntabs = 12;
-      npols = 1;
-
-      // adjust min_frequency for downsampling:
-      // before |  x  |     |    |    |
-      // after  |  x        X         | small 'x' should be large 'X' : add 1.5 of the original channels
-      min_frequency = min_frequency + (1.5 * bandwidth / ((float) NCHANNELS));
-
-      if (make_synthesized_beams) {
-        LOG("Cannot write synthesized beams for compressed I+TAB\n");
-        exit(EXIT_FAILURE);
-      }
-      template_file = template_case34mode02;
-      break;
-    case 1: // IQUV + TAB to deinterleave
-      ntimes = 12500;
-      nchannels = NCHANNELS;
-      ntabs = 12;
-      npols = 4;
-      break;
-    case 2: // I + IAB to be compressed and downsampled
-      ntimes = NTIMES_LOW;
-      nchannels = NCHANNELS_LOW;
-      ntabs = 1;
-      npols = 1;
-
-      // adjust min_frequency for downsampling:
-      // before |  x  |     |    |    |
-      // after  |  x        X         | small 'x' should be large 'X' : add 1.5 of the original channels
-      min_frequency = min_frequency + (1.5 * bandwidth / ((float) NCHANNELS));
-
-      if (make_synthesized_beams) {
-        LOG("Cannot write synthesized beams for compressed I+IAB\n");
-        exit(EXIT_FAILURE);
-      }
-      template_file = template_case34mode02;
-      break;
-    case 3: // IQUV + IAB to deinterleave
-      ntimes = 12500;
-      nchannels = NCHANNELS;
-      ntabs = 1;
-      npols = 4;
-      break;
-    default:
-      LOG("Illegal science mode %i\n", science_mode);
-      exit(EXIT_FAILURE);
-  }
-
   switch (science_case) {
     case 3:
+      ntabs = 9;
       sequence_length = 25;
       if (padded_size < 12500) {
         LOG("Error: padded_size too small, should be at least 12500 for science case 3\n");
@@ -459,6 +408,7 @@ int main (int argc, char *argv[]) {
       }
       break;
     case 4:
+      ntabs = 12;
       sequence_length = 25;
       if (padded_size < 12500) {
         LOG("Error: padded_size too small, should be at least 12500 for science case 4\n");
@@ -470,6 +420,56 @@ int main (int argc, char *argv[]) {
       break;
     default:
       LOG("Illegal science case %i\n", science_case);
+      exit(EXIT_FAILURE);
+  }
+
+  switch (science_mode) {
+    case 0: // I + TAB to be compressed and downsampled
+      ntimes = NTIMES_LOW;
+      nchannels = NCHANNELS_LOW;
+      npols = 1;
+
+      // adjust min_frequency for downsampling:
+      // before |  x  |     |
+      // after  |  x  X     | small 'x' should be large 'X' : add .5 of the original channels
+      min_frequency = min_frequency + (.5 * bandwidth / ((float) NCHANNELS));
+
+      if (make_synthesized_beams) {
+        LOG("Cannot write synthesized beams for compressed I+TAB\n");
+        exit(EXIT_FAILURE);
+      }
+      template_file = template_case34mode02;
+      break;
+    case 1: // IQUV + TAB to deinterleave
+      ntimes = 12500;
+      nchannels = NCHANNELS;
+      npols = 4;
+      break;
+    case 2: // I + IAB to be compressed and downsampled
+      ntimes = NTIMES_LOW;
+      nchannels = NCHANNELS_LOW;
+      ntabs = 1; // overwrite NTABS to be one
+      npols = 1;
+
+      // adjust min_frequency for downsampling:
+      // before |  x  |     |
+      // after  |  x  X     | small 'x' should be large 'X' : add .5 of the original channels
+      min_frequency = min_frequency + (.5 * bandwidth / ((float) NCHANNELS));
+
+      if (make_synthesized_beams) {
+        LOG("Cannot write synthesized beams for compressed I+IAB\n");
+        exit(EXIT_FAILURE);
+      }
+      template_file = template_case34mode02;
+      break;
+    case 3: // IQUV + IAB to deinterleave
+      ntimes = 12500;
+      nchannels = NCHANNELS;
+      ntabs = 1; // overwrite NTABS to be one
+      npols = 4;
+      break;
+    default:
+      LOG("Illegal science mode %i\n", science_mode);
       exit(EXIT_FAILURE);
   }
 

@@ -258,6 +258,10 @@ void dadafits_fits_init (const char *template_dir, const char *template_file, co
     if (output_directory) {
       if (mode == 0) {
         // one file per TAB, use letters
+        if (t > 25) {
+          LOG("TAB file index cannot be higher than 25\n")
+          exit(EXIT_FAILURE);
+        }
         snprintf(fname, 256, "%s/%s%c.fits(%s/%s)", output_directory, prefix, 'A'+t, template_dir, template_file);
       } else{
         // one file per SB, use numbers
@@ -266,6 +270,10 @@ void dadafits_fits_init (const char *template_dir, const char *template_file, co
     } else {
       if (mode == 0) {
         // one file per TAB, use letters
+        if (t > 25) {
+          LOG("TAB file index cannot be higher than 25\n")
+          exit(EXIT_FAILURE);
+        }
         snprintf(fname, 256, "%s%c.fits(%s/%s)", prefix, 'A'+t, template_dir, template_file);
       } else {
         // one file per SB, use numbers
