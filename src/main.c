@@ -299,8 +299,10 @@ int main (int argc, char *argv[]) {
     case 3:
       ntabs = 9;
       sequence_length = 25;
-      if (padded_size < 12500) {
-        LOG("Error: padded_size too small, should be at least 12500 for science case 3\n");
+      ntimes = SC3_NTIMES;
+      nchannels = NCHANNELS;
+      if (padded_size < SC3_NTIMES) {
+        LOG("Error: padded_size too small, should be at least %i for science case 3\n", SC3_NTIMES);
         exit(EXIT_FAILURE);
       }
       if (! template_file) {
@@ -310,8 +312,10 @@ int main (int argc, char *argv[]) {
     case 4:
       ntabs = 12;
       sequence_length = 25;
-      if (padded_size < 12500) {
-        LOG("Error: padded_size too small, should be at least 12500 for science case 4\n");
+      ntimes = SC4_NTIMES;
+      nchannels = NCHANNELS;
+      if (padded_size < SC4_NTIMES) {
+        LOG("Error: padded_size too small, should be at least %i for science case 4\n", SC4_NTIMES);
         exit(EXIT_FAILURE);
       }
       if (! template_file) {
@@ -341,8 +345,6 @@ int main (int argc, char *argv[]) {
       template_file = template_case34mode02;
       break;
     case 1: // IQUV + TAB to deinterleave
-      ntimes = 12500;
-      nchannels = NCHANNELS;
       npols = 4;
       break;
     case 2: // I + IAB to be compressed and downsampled
@@ -363,8 +365,6 @@ int main (int argc, char *argv[]) {
       template_file = template_case34mode02;
       break;
     case 3: // IQUV + IAB to deinterleave
-      ntimes = 12500;
-      nchannels = NCHANNELS;
       ntabs = 1; // overwrite NTABS to be one
       npols = 4;
       break;
