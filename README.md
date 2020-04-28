@@ -43,7 +43,7 @@ For details see [this section below](#downsampling-and-compression).
 The data input rate is set per science case.
 Supported cases:
 - case 3: 12500 samples per second
-- case 4: 25000 samples per second
+- case 4: 12500 samples per second
 
 ## As part of an event-based postprocessing step
 
@@ -60,7 +60,7 @@ The program implements different modes:
 The data input rate is set per science case.
 Supported cases:
 - case 3: 12500 samples per second, 9 beams
-- case 4: 25000 samples per second, 12 beams
+- case 4: 12500 samples per second, 12 beams
 
 # The ringbuffer
 
