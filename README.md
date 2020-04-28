@@ -130,6 +130,20 @@ Building is then done using the Makefile:
   make
 ```
 
+# Downsampling and compression
+
+Compression to one bit is done for each batch of 1.024 seconds, and each frequency channel, independently.
+Downsampling is done by simple summation.
+
+First, we calculate the average and standard deviation.
+Then, each sample is encoded as 0 (equal to, or below average) or 1 (above average).
+
+The average and standard deviation are stored in the FITS file as ```offset``` and ```scale```, where:
+```
+offset = avg - std
+scale = 2.0 * std
+```
+
 # Synthesized beams
 
 The tied array beams can be combined to form synthesized beams; providing more accurate localisation.
