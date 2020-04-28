@@ -1,18 +1,17 @@
-#define BYTE_TO_BINARY_PATTERN "%c%c%c%c%c%c%c%c"
-#define BYTE_TO_BINARY(byte)  \
-  (byte & 0x80 ? '1' : '0'), \
-  (byte & 0x40 ? '1' : '0'), \
-  (byte & 0x20 ? '1' : '0'), \
-  (byte & 0x10 ? '1' : '0'), \
-  (byte & 0x08 ? '1' : '0'), \
-  (byte & 0x04 ? '1' : '0'), \
-  (byte & 0x02 ? '1' : '0'), \
-  (byte & 0x01 ? '1' : '0')
-// printf( BYTE_TO_BINARY_PATTERN "\n", BYTE_TO_BINARY(data[i]));
+/**
+ * program: fits_dump
+ *          Written for the AA-Alert project, ASTRON
+ *
+ * Purpose: help debugging / reading 1-bit compressed FITS files
+ *
+ * Author: Jisk Attema, Netherlands eScience Center
+ * Licencse: Apache v2.0
+ */
 
 #include <string.h>
 #include <stdio.h>
 #include "fitsio.h"
+#include "dadafits_internal.h"
 
 void print_table(fitsfile *fptr) {
   int status, tstatus;
@@ -64,8 +63,8 @@ void fitsinfo(fitsfile *fptr) {
   status = 0; fits_get_colnum(fptr, 0, "DATA", &cd, &status); if (status) fits_report_error(stdout, status);
 
   double offs_sub;
-  float freqs[384], wts[384], scale[384], offs[384];
-  unsigned char data[384 * 500 / 8]; // array of 1 bit datapoints of [channel=384, time=500]
+  float freqs[NCHANNELS_LOW], wts[NCHANNELS_LOW], scale[NCHANNELS_LOW], offs[NCHANNELS_LOW];
+  unsigned char data[NCHANNELS_LOW * NTIMES_LOW / 8]; // array of 1 bit datapoints of [channel=NCHANNELS_LOW, time=NTIMES_LOW]
 
   long nrows;
   fits_get_num_rows(fptr, &nrows, &status);
@@ -74,24 +73,24 @@ void fitsinfo(fitsfile *fptr) {
     int channel, time, channeltime;
 
     status = 0; fits_read_col(fptr, TDOUBLE, cos, row, 1L, 1L, 0, &offs_sub, NULL, &status);
-    status = 0; fits_read_col(fptr, TFLOAT, cf, row, 1L, 384L, 0, freqs, NULL, &status);
-    status = 0; fits_read_col(fptr, TFLOAT, cw, row, 1L, 384L, 0, wts,   NULL, &status);
-    status = 0; fits_read_col(fptr, TFLOAT, cs, row, 1L, 384L, 0, scale, NULL, &status);
-    status = 0; fits_read_col(fptr, TFLOAT, co, row, 1L, 384L, 0, offs,  NULL, &status);
-    status = 0; fits_read_col(fptr, TBYTE, cd, 1L, 1L, 384 * 500 / 8, 0, data, NULL, &status);
+    status = 0; fits_read_col(fptr, TFLOAT, cf, row, 1L, NCHANNELS_LOW, 0, freqs, NULL, &status);
+    status = 0; fits_read_col(fptr, TFLOAT, cw, row, 1L, NCHANNELS_LOW, 0, wts,   NULL, &status);
+    status = 0; fits_read_col(fptr, TFLOAT, cs, row, 1L, NCHANNELS_LOW, 0, scale, NULL, &status);
+    status = 0; fits_read_col(fptr, TFLOAT, co, row, 1L, NCHANNELS_LOW, 0, offs,  NULL, &status);
+    status = 0; fits_read_col(fptr, TBYTE, cd, 1L, 1L, NCHANNELS_LOW * NTIMES_LOW / 8, 0, data, NULL, &status);
     if (status) fits_report_error(stdout, status);
 
     printf("\n\n# Frequencies, weights, scales and offsets for subint: %li, subint offset %e\n", row, offs_sub);
 
-    for (channel=0; channel<384; channel++){
+    for (channel=0; channel<NCHANNELS_LOW; channel++){
       printf("%i %lf %lf %lf %lf\n", channel, freqs[channel], wts[channel], scale[channel], offs[channel]);
     }
 
     printf("\n\n# Data, 1 bit, shown per byte [channel, time]:\n");
 
-    for (channeltime=0; channeltime<384*500/8; channeltime++) {
-      channel = (channeltime * 8) / 500;
-      time = (channeltime * 8) % 500;
+    for (channeltime=0; channeltime<NCHANNELS_LOW*NTIMES_LOW/8; channeltime++) {
+      channel = (channeltime * 8) / NTIMES_LOW;
+      time = (channeltime * 8) % NTIMES_LOW;
       if (channeltime % 20 == 0) {
         printf( "\n[channel= % 6i, time=  % 6i] ", channel, time);
       }
@@ -142,58 +141,8 @@ int main(int argc, char *argv[]) {
   status = 0;
   fits_open_file(&fptr, argv[1], READONLY, &status);
 
+  print_hdus(fptr);
   fitsinfo(fptr);
 
   fits_close_file (fptr, &status);
 }
-
-int write_example(int argc, char *argv[]) {
-  int status;
-  fitsfile *fptr;
-
-  fits_create_file(&fptr, "example.fits.gz(template.txt)", &status);
- 
-  fits_movabs_hdu(fptr, 1, NULL, &status);
-  fits_write_date(fptr, &status);
-  fits_write_chksum(fptr, &status);
- 
-  fits_movabs_hdu(fptr, 2, NULL, &status);
-  fits_insert_rows(fptr, 0, 1, &status);
- 
-  char bits[48000];
-  fits_write_col(fptr,
-      TBYTE,        // type
-      17,           // colnum
-      1,            // firstrow
-      1,            // firstelem
-      48000,        // nelement
-      &bits,        // *array
-      &status       // *status
-  );
- 
-  fits_write_chksum(fptr, &status);
-  fits_close_file (fptr, &status);
-}
-
-/*
-  fits_write_col(fptr, TDOUBLE, 2, rowid, 1, 1, offs_sub, &status);
-  fits_write_col(fptr, TDOUBLE, 3, rowid, 1, 1, lst_sub,  &status);
-  fits_write_col(fptr, TDOUBLE, 4, rowid, 1, 1, ra_sub,   &status);
-  fits_write_col(fptr, TDOUBLE, 5, rowid, 1, 1, dec_sub,  &status);
-  fits_write_col(fptr, TDOUBLE, 6, rowid, 1, 1, glon_sub, &status);
-  fits_write_col(fptr, TDOUBLE, 7, rowid, 1, 1, glat_sub, &status);
-
-  fits_write_col(fptr, TFLOAT,  8, rowid, 1, 1, fd_ang,  &status);
-  fits_write_col(fptr, TFLOAT,  9, rowid, 1, 1, pos_ang, &status);
-  fits_write_col(fptr, TFLOAT, 10, rowid, 1, 1, par_ang, &status);
-  fits_write_col(fptr, TFLOAT, 11, rowid, 1, 1, tel_az,  &status);
-  fits_write_col(fptr, TFLOAT, 12, rowid, 1, 1, tel_zen, &status);
-
-  fits_write_col(fptr, TFLOAT, 13, rowid, 1, 384, dat_freq, &status);
-  fits_write_col(fptr, TFLOAT, 14, rowid, 1, 384, dat_wts,  &status);
-  fits_write_col(fptr, TFLOAT, 15, rowid, 1, 384, dat_offs, &status);
-  fits_write_col(fptr, TFLOAT, 16, rowid, 1, 384, dat_scl,  &status);
-
-  fits_write_col(fptr, TBYTE, 17, rowid, 1, 48000, data, &status);
-*/
-
