@@ -33,8 +33,8 @@ The program implements different modes:
 - mode 2: Stokes I + TAB (12 tied array beams)
 
 In these modes data is also:
-* integrated over time to reduce sample rate to 500 samples per 1.024 seconds
-* summed over frequencies to reduce total number of frequencies to 384
+* integrated over time to reduce sample rate to 1250 samples per 1.024 seconds
+* summed over frequencies to reduce total number of frequencies to 768
 
 ## Science cases
 
