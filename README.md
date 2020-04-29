@@ -97,7 +97,7 @@ Array padding along the fastest dimension is implemented to facilitate memory co
 
 For modes 1 and 3 (ie Stokes IQUV), a ringbuffer page is an interleaved array: [tab, channel\_offset, sequence\_number, packet]
 Where:
-- tab ranges from 0 to 0 or 11 (modes IAB or TAB)
+- tab ranges from 0 to 0 (IAB) or 9 (science case 3 TAB) or 11 (science case 4 TAB)
 - channel\_offset ranges from 0 upto 383 (NCHANNELS/4 - 1)
 - sequence\_number ranges from 0 upto 24
 - packet is a direct copy of a UDP datapacket coming from the network, making up 8000 bytes
@@ -119,18 +119,14 @@ Data is stored one beam per file.
 For TAB the filename is ```tabX.fits```, where X indicates the TAB number. A=0, B=1, etc.
 For synthesized beams the filename is ```synXX.fits```, where XX is the synthesized beam number
 
-
-
-
 # Building
 
-To connect to the PSRDada ring buffer, we depend on PSRDada code. Ensure PSRDada is compiled with shared libraries enabled and ```libpsrdada.so``` can be found through ```LD\_LIBRARY\_PATH```.
+To connect to the PSRDada ring buffer, we depend on PSRDada code. Ensure PSRDada is compiled with shared libraries enabled and ```libpsrdada.so``` can be found through ```LD_LIBRARY_PATH```.
 Building is done using CMake:
 ```bash
   mkdir build && cd build
   cmake ../
-  make
-  make install
+  make && make install
 ```
 
 # Downsampling and compression
@@ -147,6 +143,10 @@ offset = avg - std
 scale = 2.0 * std
 ```
 
+Combined, the downsampling and compression achieve a reduction in data size of a factor ~140 compared to the
+filterbank output format (See also [dadafilterbank](https://github.com/AA-ALERT/dadafilterbank)).
+A factor 20 is achieved from the reduction in time and frequency resolution, another factor 7 by 1-bit compression.
+
 # Synthesized beams
 
 The tied-array beams can be combined to form synthesized beams; providing more accurate localisation.
@@ -157,13 +157,13 @@ The following rules apply:
  * allow comments: everything following a '#'  until the next newline is a comment, lines starting with '#' are ignored
  * any and all white space is ignored and is only relevant for separating the numbers
  * completely empty lines are ignored
- * tied-array beams must be numbered from 0 (central beam) to NTABS - 1
- * a highed tied-array beam index implies a position right or westward of the center
 
 The indexing scheme is as follows:
- * the middle index denotes the central position (e.g. 35 if there are 71 synthesized beams in total)
- * a lower index implies a position right or westward of the center
- * a higher index denotes a position left or eastward of the center
+ * tied-array beams must be numbered from 0 (central beam) to NTABS - 1
+ * a higher tied-array beam index implies a position right or westward of the center
+ * the middle synthesised beam index denotes the central position (e.g. 35 if there are 71 synthesized beams in total)
+ * a lower synthesised beam index implies a position right or westward of the center
+ * a higher synthesised beam index implies a position left or eastward of the center
 
 # Contributers
 
