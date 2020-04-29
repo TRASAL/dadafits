@@ -150,7 +150,7 @@ A factor 20 is achieved from the reduction in time and frequency resolution, ano
 The reduced resolution of the data imply that transient events can only be detected if they are very bright. 
 However, for periodic signals many pulses can be summed and the pulse profile extracted. An example of a pulsar signal in 1-bit downsampled data is shown here:
 
-![Pulsar FITS](pulsar_fits.png)
+![Pulsar FITS](static/pulsar_fits.png)
 
 # Synthesized beams
 
@@ -169,6 +169,9 @@ The indexing scheme is as follows:
  * the middle synthesised beam index denotes the central position (e.g. 35 if there are 71 synthesized beams in total)
  * a lower synthesised beam index implies a position right or westward of the center
  * a higher synthesised beam index implies a position left or eastward of the center
+
+An example synthesised beam table for 12 TABs and 71 SBs is included:
+[sbtable-sc4-12tabs-71-sbs.txt](static/sbtable-sc4-12tabs-71-sbs.txt)
 
 # Contributers
 
