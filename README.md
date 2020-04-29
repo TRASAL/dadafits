@@ -77,7 +77,7 @@ For values that should be present see the table below.
 | BW             | double  | Mhz                 | Total bandwidth of observation                    |  |
 | PADDED\_SIZE   | int     | bytes               | Length of the fastest dimension of the data array |  |
 | SCIENCE\_CASE  | int     | 1                   | Mode of operation of ARTS, determines data rate   | Must be 3 or 4 |
-| SCIENCE\_MODE  | int     | 1                   | Mode of operation of ARTS, determines data layout | Either 1,2,3, or 4 |
+| SCIENCE\_MODE  | int     | 1                   | Mode of operation of ARTS, determines data layout | Either 0,1,2, or 3 |
 | RA\_HMS        | string  | HH:MM:SS.ssss       | Right ascension                                   | maps to RA |
 | DEC\_HMS       | string  |+HH:MM:SS.ssss       | Declination                                       | maps to DEC |
 | SCANLEN        | float   | seconds             | Requested observation length                      | maps to SCANLEN |
