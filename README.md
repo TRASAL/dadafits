@@ -1,6 +1,6 @@
 # dadafits
 
-Connect to a [PSRdada](http://psrdada.sourceforge.net/) ringbuffer, optionally downsample and compress, and write out the data in [FITS](https://fits.gsfc.nasa.gov/fits_home.html) format.
+Connect to a [PSRDada](http://psrdada.sourceforge.net/) ringbuffer, optionally downsample and compress, and write out the data in [FITS](https://fits.gsfc.nasa.gov/fits_home.html) format.
 
 This program is part of the data handling pipeline for the AA-ALERT project.
 See [dadatrigger](https://github.com/AA-ALERT/dadatrigger) for an introduction and dataflow schema.
@@ -21,15 +21,15 @@ Command line arguments:
 
 # Modes of operation
 
-## As part of the real time pipeline 
+## As part of the real-time pipeline 
 
-These modes are for archiving data; the program can be run as part of the realtime pipeline.
+These modes are for archiving data; the program can be run as part of the real-time pipeline.
 
 ### Science modes
 
 The program implements different modes:
-- mode 0: Stokes I + IAB (coherent beams, so only one tied array beam)
-- mode 2: Stokes I + TAB (multiple tied array beams)
+- mode 0: Stokes I + IAB (incoherent beams, so only one "tied-array" beam)
+- mode 2: Stokes I + TAB (multiple tied-array beams)
 
 In these modes data is also:
 * integrated over time to reduce sample rate to 1250 samples per 1.024 seconds
@@ -42,12 +42,12 @@ For details see [this section below](#downsampling-and-compression).
 
 The data input rate is set per science case.
 Supported cases:
-- case 3: 12500 samples per second
-- case 4: 12500 samples per second
+- case 3: 12500 samples per second, 9 beams
+- case 4: 12500 samples per second, 12 beams
 
 ## As part of an event-based postprocessing step
 
-These modes are for analysing event data, and are not optimized for real time use.
+These modes are for analysing event data, and are not optimized for real-time use.
 
 ### Science modes
 
@@ -66,7 +66,7 @@ Supported cases:
 
 ## Header block
 
-Metadata is read from the PSRdada header block, and copied to the FITS header.
+Metadata is read from the PSRDada header block, and copied to the FITS header.
 Note that much of the metadata available in the header block is ignored, due to code constraints and optimizations.
 
 For values that should be present see the table below.
@@ -124,13 +124,13 @@ For synthesized beams the filename is ```synXX.fits```, where XX is the synthesi
 
 # Building
 
-To connect to the PSRDada ring buffer, we depend on some object files that can be obtained when compiling PSRDada.
-The location of these files is assumed to be in the **PSRDADA** directory.
-Alternatively, set **SOURCE\_ROOT** such that the files are in **SOURCE\_ROOT/src/psrdada**.
-
-Building is then done using the Makefile:
+To connect to the PSRDada ring buffer, we depend on PSRDada code. Ensure PSRDada is compiled with shared libraries enabled and ```libpsrdada.so``` can be found through ```LD\_LIBRARY\_PATH```.
+Building is done using CMake:
 ```bash
+  mkdir build && cd build
+  cmake ../
   make
+  make install
 ```
 
 # Downsampling and compression
@@ -149,24 +149,27 @@ scale = 2.0 * std
 
 # Synthesized beams
 
-The tied array beams can be combined to form synthesized beams; providing more accurate localisation.
-A synthesized beam is a linear combination (simple sum) of tied array beams.
+The tied-array beams can be combined to form synthesized beams; providing more accurate localisation.
+A synthesized beam is a linear combination (simple sum) of tied-array beams.
 
-The synthesized beam table lists per synthesized beam the constituent tied array beams.
+The synthesized beam table lists per synthesized beam the constituent tied-array beams.
 The following rules apply:
  * allow comments: everything following a '#'  until the next newline is a comment, lines starting with '#' are ignored
  * any and all white space is ignored and is only relevant for separating the numbers
  * completely empty lines are ignored
+ * tied-array beams must be numbered from 0 (central beam) to NTABS - 1
+ * a highed tied-array beam index implies a position right or westward of the center
 
 The indexing scheme is as follows:
- * 0 denotes the central position,
- * a negative index implies a position left or westward of the center and
- * a positive index denotes a position right or eastward of the center.
+ * the middle index denotes the central position (e.g. 35 if there are 71 synthesized beams in total)
+ * a lower index implies a position right or westward of the center
+ * a higher index denotes a position left or eastward of the center
 
 # Contributers
 
-Jisk Attema, Netherlands eScience Center
-Leon Oostrum, ASTRON / UvA
+Jisk Attema, Netherlands eScience Center  
+Leon Oostrum, ASTRON / UvA  
+Gijs Molenaar, Pythonic.nl
 
 # NOTES
 
