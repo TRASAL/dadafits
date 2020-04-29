@@ -147,6 +147,11 @@ Combined, the downsampling and compression achieve a reduction in data size of a
 filterbank output format (See also [dadafilterbank](https://github.com/AA-ALERT/dadafilterbank)).
 A factor 20 is achieved from the reduction in time and frequency resolution, another factor 7 by 1-bit compression.
 
+The reduced resolution of the data imply that transient events can only be detected if they are very bright. 
+However, for periodic signals many pulses can be summed and the pulse profile extracted. An example of a pulsar signal in 1-bit downsampled data is shown here:
+
+![Pulsar FITS](pulsar_fits.png)
+
 # Synthesized beams
 
 The tied-array beams can be combined to form synthesized beams; providing more accurate localisation.
