@@ -173,6 +173,11 @@ The indexing scheme is as follows:
 An example synthesised beam table for 12 TABs and 71 SBs is included:
 [sbtable-sc4-12tabs-71-sbs.txt](static/sbtable-sc4-12tabs-71-sbs.txt)
 
+# Parameterset
+The observation parameterset is a string of key-value pairs. Keys and values are separated by ```=```, 
+white space around the separator is ignored. Key-value pairs are separated by a newline character. 
+The parameterset is first compressed with ```bz2``` compression, then encoded with ```hex```encoding. 
+The encoded parset is then stored to the FITS header in the ```PARSET``` field.
 # Contributers
 
 Jisk Attema, Netherlands eScience Center  
