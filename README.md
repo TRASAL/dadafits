@@ -178,6 +178,14 @@ The observation parameterset is a string of key-value pairs. Keys and values are
 white space around the separator is ignored. Key-value pairs are separated by a newline character. 
 The parameterset is first compressed with ```bz2``` compression, then encoded with ```hex```encoding. 
 The encoded parset is then stored to the FITS header in the ```PARSET``` field.
+
+# Performance
+
+For offline processing of IQUV data, the data are first read from disk into a PSRDada ringbuffer. ```dadafits```then
+deinterleaves these data and writes them to disk in FITS format.
+Writing either 12 tied-array beams or one synthesised beam to disk takes roughly 13 seconds
+per page of 1.024 seconds.
+
 # Contributers
 
 Jisk Attema, Netherlands eScience Center  
