@@ -86,13 +86,13 @@ void fitsinfo(fitsfile *fptr) {
       printf("%i %lf %lf %lf %lf\n", channel, freqs[channel], wts[channel], scale[channel], offs[channel]);
     }
 
-    printf("\n\n# Data, 1 bit, shown per byte [channel, time]:\n");
+    printf("\n\n# Data, 1 bit, shown per byte [time, channel]:\n");
 
     for (channeltime=0; channeltime<NCHANNELS_LOW*NTIMES_LOW/8; channeltime++) {
-      channel = (channeltime * 8) / NTIMES_LOW;
-      time = (channeltime * 8) % NTIMES_LOW;
-      if (channeltime % 20 == 0) {
-        printf( "\n[channel= % 6i, time=  % 6i] ", channel, time);
+      time = (channeltime * 8) / NCHANNELS_LOW;
+      channel = (channeltime * 8) % NCHANNELS_LOW;
+      if (channeltime % 24 == 0) {
+        printf( "\n[time=  % 6i, channel= % 6i] ", time, channel);
       }
       printf( " % 4i", data[channeltime]);
     }
