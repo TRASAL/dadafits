@@ -6,106 +6,6 @@
  *          Depending on science case and mode, reduce time and frequency resolution to 1 bit
  *          Fits files are created using templates
  *
- * Science case 3, mode 0
- *          template: sc34_1bit_I_reduced.txt
- *
- *          A ringbuffer page is interpreted as an array of Stokes I:
- *          [NTABS, NCHANNELS, padded_size] = [9, 1536, > 12500]
- *
- *          The code reduces (by summation) from 12500 to 500 timesteps
- *          and from 1536 to 384 channels.
- *          Time dimension padding is required by other programes (GPU pipeline)
- *          that connects to the same ringbuffer.
- *
- * Science case 3, mode 1:
- *          template: sc3_IQUV.txt
- *
- *          A ringbuffer page is interpreted as an interleaved array of Stokes IQUV:
- *          [tab][channel_offset][sequence_number][packet]
- *
- *          tab             := ranges from 0 to NTABS (9)
- *          channel_offset  := ranges from 0 to NCHANNELS/4 (384)
- *          sequence_number := ranges from 0 to 25
- *
- *          with a packet: [t0 .. t499][c0 .. c3][IQUV] total of 500*4*4=8000 bytes
- *          t = tn + sequence_number * 500
- *          c = cn + channel_offset * 4
- *
- * Science case 3, mode 2:
- *          template: sc34_1bit_I_reduced.txt
- *
- *          A ringbuffer page is interpreted as an array of Stokes I:
- *          [NTABS, NCHANNELS, padded_size] = [1, 1536, > 12500]
- *
- *          The code reduces (by summation) from 12500 to 500 timesteps
- *          and from 1536 to 384 channels.
- *          Time dimension padding is required by other programes (GPU pipeline)
- *          that connects to the same ringbuffer.
- *
- * Science case 3, mode 3:
- *          template: sc3_IQUV.txt
- *
- *          A ringbuffer page is interpreted as an interleaved array of Stokes IQUV:
- *          [tab][channel_offset][sequence_number][packet]
- *
- *          tab             := ranges from 0 to NTABS (1)
- *          channel_offset  := ranges from 0 to NCHANNELS/4 (384)
- *          sequence_number := ranges from 0 to 25
- *
- *          with a packet: [t0 .. t499][c0 .. c3][IQUV] total of 500*4*4=8000 bytes
- *          t = tn + sequence_number * 500
- *          c = cn + channel_offset * 4
- *
- * Science case 4, mode 0:
- *          template: sc34_1bit_I_reduced.txt
- *
- *          A ringbuffer page is interpreted as an array of Stokes I:
- *          [NTABS, NCHANNELS, padded_size] = [12, 1536, > 12500]
- *
- *          The code reduces (by summation) from 12500 to 500 timesteps
- *          and from 1536 to 384 channels.
- *          Time dimension padding is required by other programes (GPU pipeline)
- *          that connects to the same ringbuffer.
- *
- * Science case 4, mode 1:
- *          template: sc4_IQUV.txt
- *
- *          A ringbuffer page is interpreted as an interleaved array of Stokes IQUV:
- *          [tab][channel_offset][sequence_number][packet]
- *
- *          tab             := ranges from 0 to NTABS (12)
- *          channel_offset  := ranges from 0 to NCHANNELS/4 (384)
- *          sequence_number := ranges from 0 to 50
- *
- *          with a packet: [t0 .. t499][c0 .. c3][IQUV] total of 500*4*4=8000 bytes
- *          t = tn + sequence_number * 500
- *          c = cn + channel_offset * 4
- *
- * Science case 4, mode 2:
- *          template: sc34_1bit_I_reduced.txt
- *
- *          A ringbuffer page is interpreted as an array of Stokes I:
- *          [NTABS, NCHANNELS, padded_size] = [1, 1536, > 12500]
- *
- *          The code reduces (by summation) from 12500 to 500 timesteps
- *          and from 1536 to 384 channels.
- *          Time dimension padding is required by other programes (GPU pipeline)
- *          that connects to the same ringbuffer.
- *
- * Science case 4, mode 3:
- *          template: sc4_IQUV.txt
- *
- *          A ringbuffer page is interpreted as an interleaved array of Stokes IQUV:
- *          [tab][channel_offset][sequence_number][packet]
- *
- *          tab             := ranges from 0 to NTABS (1)
- *          channel_offset  := ranges from 0 to NCHANNELS/4 (384)
- *          sequence_number := ranges from 0 to 50
- *
- *          with a packet: [t0 .. t499][c0 .. c3][IQUV] total of 500*4*4=8000 bytes
- *          t = tn + sequence_number * 500
- *          c = cn + channel_offset * 4
- *
  * Author: Jisk Attema, Netherlands eScience Center
  * Licencse: Apache v2.0
  */
@@ -399,8 +299,10 @@ int main (int argc, char *argv[]) {
     case 3:
       ntabs = 9;
       sequence_length = 25;
-      if (padded_size < 12500) {
-        LOG("Error: padded_size too small, should be at least 12500 for science case 3\n");
+      ntimes = SC3_NTIMES;
+      nchannels = NCHANNELS;
+      if (padded_size < SC3_NTIMES) {
+        LOG("Error: padded_size too small, should be at least %i for science case 3\n", SC3_NTIMES);
         exit(EXIT_FAILURE);
       }
       if (! template_file) {
@@ -410,8 +312,10 @@ int main (int argc, char *argv[]) {
     case 4:
       ntabs = 12;
       sequence_length = 25;
-      if (padded_size < 12500) {
-        LOG("Error: padded_size too small, should be at least 12500 for science case 4\n");
+      ntimes = SC4_NTIMES;
+      nchannels = NCHANNELS;
+      if (padded_size < SC4_NTIMES) {
+        LOG("Error: padded_size too small, should be at least %i for science case 4\n", SC4_NTIMES);
         exit(EXIT_FAILURE);
       }
       if (! template_file) {
@@ -441,8 +345,6 @@ int main (int argc, char *argv[]) {
       template_file = template_case34mode02;
       break;
     case 1: // IQUV + TAB to deinterleave
-      ntimes = 12500;
-      nchannels = NCHANNELS;
       npols = 4;
       break;
     case 2: // I + IAB to be compressed and downsampled
@@ -463,8 +365,6 @@ int main (int argc, char *argv[]) {
       template_file = template_case34mode02;
       break;
     case 3: // IQUV + IAB to deinterleave
-      ntimes = 12500;
-      nchannels = NCHANNELS;
       ntabs = 1; // overwrite NTABS to be one
       npols = 4;
       break;

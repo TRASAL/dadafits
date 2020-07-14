@@ -7,7 +7,6 @@
 
 /**
  * Pack series of 8-bit StokesI to 1-bit
- *   NBIN*NCHAN*NPOL*NSBLK => 1 x 384 x 1 x 500 bits equals or 24000 bytes
  *
  *   @param {uint[]}  downsampled[NCHANNELS_LOW * NTIMES_LOW]
  *   @param {uchar[]} packed[NCHANNELS_LOW * NTIMES_LOW / 8]
