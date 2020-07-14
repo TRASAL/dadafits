@@ -11,8 +11,8 @@ find_package (cfitsio REQUIRED)
 find_package (CUDA REQUIRED)
 
 # expose some variables to the source code
-set (dadafits_VERSION_MAJOR 0)
-set (dadafits_VERSION_MINOR 1)
+set (dadafits_VERSION_MAJOR 1)
+set (dadafits_VERSION_MINOR 0)
 configure_file ("src/config.h.in" "${PROJECT_BINARY_DIR}/config.h")
 include_directories ("${PROJECT_BINARY_DIR}")
 
