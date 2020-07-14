@@ -1,5 +1,7 @@
 # dadafits
 
+[![DOI](https://zenodo.org/badge/94994432.svg)](https://zenodo.org/badge/latestdoi/94994432)
+
 Connect to a [PSRDada](http://psrdada.sourceforge.net/) ringbuffer, optionally downsample and compress, and write out the data in [FITS](https://fits.gsfc.nasa.gov/fits_home.html) format.
 
 This program is part of the data handling pipeline for the AA-ALERT project.
