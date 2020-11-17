@@ -5,7 +5,7 @@
 Connect to a [PSRDada](http://psrdada.sourceforge.net/) ringbuffer, optionally downsample and compress, and write out the data in [FITS](https://fits.gsfc.nasa.gov/fits_home.html) format.
 
 This program is part of the data handling pipeline for the AA-ALERT project.
-See [dadatrigger](https://github.com/AA-ALERT/dadatrigger) for an introduction and dataflow schema.
+See [dadatrigger](https://github.com/TRASAL/dadatrigger) for an introduction and dataflow schema.
 
 # Usage
 
@@ -146,7 +146,7 @@ scale = 2.0 * std
 ```
 
 Combined, the downsampling and compression achieve a reduction in data size of a factor ~140 compared to the
-filterbank output format (See also [dadafilterbank](https://github.com/AA-ALERT/dadafilterbank)).
+filterbank output format (See also [dadafilterbank](https://github.com/TRASAL/dadafilterbank)).
 A factor 20 is achieved from the reduction in time and frequency resolution, another factor 7 by 1-bit compression.
 
 The reduced resolution of the data imply that transient events can only be detected if they are very bright. 
